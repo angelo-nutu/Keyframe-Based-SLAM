@@ -3,6 +3,8 @@ import cv2
 import numpy as np
 from ultralytics.utils.plotting import Annotator
 import pyrealsense2 as rs
+import zmq
+import msgpack
 
 class_colors = {
     0: (255, 0, 0),
@@ -12,7 +14,7 @@ class_colors = {
     4: (0, 255, 255)
 }
 
-def initialize_pipeline():
+def init():
     pipeline = rs.pipeline()
     config = rs.config()
     config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
@@ -23,7 +25,10 @@ def initialize_pipeline():
     intrinsics = profile.get_stream(rs.stream.depth).as_video_stream_profile().intrinsics
     align = rs.align(rs.stream.color)
 
-    return pipeline, align, intrinsics, depth_scale
+    socket = zmq.Context().socket(zmq.PUB)
+    socket.bind("tcp://*:5555")
+
+    return pipeline, align, intrinsics, depth_scale, socket
 
 def get_frames(pipeline, align):
     frames = pipeline.wait_for_frames()
@@ -92,7 +97,7 @@ def depth_to_pointcloud(intrinsics, depth_frame, depth_scale):
 
 
 def main():
-    pipeline, align, intrinsics, depth_scale = initialize_pipeline()
+    pipeline, align, intrinsics, depth_scale, socket = init()
     model = YOLO('./best_seg.onnx', task="segment")
 
     try:
@@ -109,11 +114,13 @@ def main():
                     color_image, centroids = compute_bboxes_masks(color_image, r.boxes, r.masks, model_names)
                     for cx, cy in centroids:
                         depth = extract_depth(depth_image, cx, cy)
-                        if depth is not None:
+                        if depth is not None and depth != 0:
                             cv2.circle(depth_image, (cx, cy), 10, (255, 255, 255), -1)
                             point = pointcloud[cy * depth_image.shape[1] + cx]
                             print(f"Point: {point}")
                             print(f"Depth: {depth}")
+                            msg = msgpack.packb(point.tolist())
+                            socket.send(msg)
                 else:
                     continue
 
