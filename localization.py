@@ -5,6 +5,7 @@ from ultralytics.utils.plotting import Annotator
 import pyrealsense2 as rs
 import zmq
 import msgpack
+import struct
 
 class_colors = {
     0: (255, 0, 0),
@@ -109,6 +110,7 @@ def main():
 
             res = model.predict(color_image, imgsz=(480, 640))
             model_names = model.names
+            points = []
             for r in res:
                 if r.boxes.shape[0] != 0:
                     color_image, centroids = compute_bboxes_masks(color_image, r.boxes, r.masks, model_names)
@@ -119,10 +121,12 @@ def main():
                             point = pointcloud[cy * depth_image.shape[1] + cx]
                             print(f"Point: {point}")
                             print(f"Depth: {depth}")
-                            msg = msgpack.packb(point.tolist())
-                            socket.send(msg)
+                            points.append(point.tolist())
                 else:
                     continue
+
+            msg = struct.pack(f"{len(points) * 3}f", *[coord for pos in points for coord in pos])
+            socket.send(msg)
 
             depth_image = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
             images = np.hstack((color_image, depth_image))
