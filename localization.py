@@ -47,6 +47,7 @@ def get_frames(pipeline, align):
 def compute_bboxes_masks(color_image, boxes, masks, model_names):
     annotator = Annotator(color_image)
     centroids = []
+    classes = []
     for box, mask in zip(boxes, masks):
         b = box.xyxy[0]
         c = box.cls
@@ -67,7 +68,8 @@ def compute_bboxes_masks(color_image, boxes, masks, model_names):
                 cy = int(M["m01"] / M["m00"])
                 cv2.circle(color_image, (cx, cy), 5, (255, 255, 255), -1)
                 centroids.append((cx, cy))
-    return annotator.result(), centroids
+                classes.append(int(c))
+    return annotator.result(), centroids, classes
 
 def extract_depth(depth_frame, cx, cy):
     if 0 <= cx < depth_frame.shape[1] and 0 <= cy < depth_frame.shape[0]:
@@ -111,10 +113,13 @@ def main():
             res = model.predict(color_image, imgsz=(480, 640))
             model_names = model.names
             points = []
+            cls = []
             for r in res:
                 if r.boxes.shape[0] != 0:
-                    color_image, centroids = compute_bboxes_masks(color_image, r.boxes, r.masks, model_names)
-                    for cx, cy in centroids:
+                    color_image, centroids, classes = compute_bboxes_masks(color_image, r.boxes, r.masks, model_names)
+                    for i in range(0, len(centroids) - 1):
+                        cx = centroids[i][0]
+                        cy = centroids[i][1]
                         depth = extract_depth(depth_image, cx, cy)
                         if depth is not None and depth != 0:
                             cv2.circle(depth_image, (cx, cy), 10, (255, 255, 255), -1)
@@ -122,10 +127,15 @@ def main():
                             print(f"Point: {point}")
                             print(f"Depth: {depth}")
                             points.append(point.tolist())
+                            cls.append(classes[i])
+                            print(f"Class ID: {classes[i]}")
+                            
                 else:
                     continue
 
             msg = struct.pack(f"{len(points) * 3}f", *[coord for pos in points for coord in pos])
+            msg += struct.pack(f"{len(cls)}i", *cls)
+            print(f"Sending {len(points)} points and {len(cls)} class IDs")
             socket.send(msg)
 
             depth_image = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
