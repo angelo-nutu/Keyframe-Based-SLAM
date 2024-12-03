@@ -14,7 +14,7 @@ int main() {
         socket.recv(&message);
 
         size_t total_size = message.size();
-        if (total_size < sizeof(float) * 3 + sizeof(int)) {
+        if (total_size < sizeof(float) * 2 + sizeof(int)) {
             continue; 
         }
 
@@ -33,27 +33,27 @@ int main() {
             char* data = static_cast<char*>(message.data());
 
             // :)
-            std::memcpy(&x, data + i * (sizeof(float) * 3 + sizeof(int)), sizeof(float));
-            std::memcpy(&y, data + i * (sizeof(float) * 3 + sizeof(int)) + sizeof(float), sizeof(float));
-            std::memcpy(&z, data + i * (sizeof(float) * 3 + sizeof(int)) + sizeof(float) * 2, sizeof(float));
+            std::memcpy(&x, data + i * (sizeof(float) * 2 + sizeof(int)), sizeof(float));
+            std::memcpy(&y, data + i * (sizeof(float) * 2 + sizeof(int)) + sizeof(float), sizeof(float));
+            //std::memcpy(&z, data + i * (sizeof(float) * 2 + sizeof(int)) + sizeof(float) * 2, sizeof(float));
 
             // :D
-            std::memcpy(&class_id, data + i * (sizeof(float) * 3 + sizeof(int)) + sizeof(float) * 3, sizeof(int));
+            std::memcpy(&class_id, data + i * (sizeof(float) * 2 + sizeof(int)) + sizeof(float) * 2, sizeof(int));
 
             // Store the values
             positions.push_back(x);
             positions.push_back(y);
-            positions.push_back(z);
+            //positions.push_back(z);
             class_ids.push_back(class_id);
         }
 
         // Print each (x, y, z) with the corresponding class ID!!!!!!!!!!!!!!
-        for (size_t i = 0; i < positions.size() / 3; ++i) {
-            float x = positions[i * 3];
-            float y = positions[i * 3 + 1];
-            float z = positions[i * 3 + 2];
+        for (size_t i = 0; i < positions.size() / 2; ++i) {
+            float x = positions[i * 2];
+            float y = positions[i * 2 + 1];
+            //float z = positions[i * 3 + 2];
             int class_id = class_ids[i];
-            std::cout << "Point Position: [" << x << ", " << y << ", " << z << "], Class ID: " << class_id << "\n";
+            std::cout << "Point Position: [" << x << ", " << y /*<< ", " << z*/ << "], Class ID: " << class_id << "\n";
         }
     }
 

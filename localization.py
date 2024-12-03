@@ -15,6 +15,19 @@ class_colors = {
     4: (0, 255, 255)
 }
 
+yaw = np.deg2rad(0)
+cos_yaw = np.cos(yaw)
+sin_yaw = np.sin(yaw)
+x_translation = -275 + 6.25
+y_translation = 0
+z_translation = 747
+trasformation_matrix = np.array([
+    [cos_yaw, 0, sin_yaw, x_translation],
+    [0, 1, 0, y_translation],
+    [-sin_yaw, 0, cos_yaw, z_translation],
+    [0,0,0,1]
+])
+
 def init():
     pipeline = rs.pipeline()
     config = rs.config()
@@ -98,6 +111,10 @@ def depth_to_pointcloud(intrinsics, depth_frame, depth_scale):
 
     return points
 
+def cam_to_com(point):
+    homogeneous_point = np.append(point,1)
+    return np.matmul(trasformation_matrix,homogeneous_point)[:3]
+
 
 def main():
     pipeline, align, intrinsics, depth_scale, socket = init()
@@ -123,17 +140,19 @@ def main():
                         depth = extract_depth(depth_image, cx, cy)
                         if depth is not None and depth != 0:
                             cv2.circle(depth_image, (cx, cy), 10, (255, 255, 255), -1)
-                            point = pointcloud[cy * depth_image.shape[1] + cx]
-                            print(f"Point: {point}")
+                            com_point = cam_to_com(pointcloud[cy * depth_image.shape[1] + cx])
+
+                            print(f"Point: {com_point}")
                             print(f"Depth: {depth}")
-                            points.append(point.tolist())
+                            points.append(com_point.tolist())
                             cls.append(classes[i])
                             print(f"Class ID: {classes[i]}")
                             
                 else:
                     continue
 
-            msg = struct.pack(f"{len(points) * 3}f", *[coord for pos in points for coord in pos])
+            # msg = struct.pack(f"{len(points) * 3}f", *[coord for pos in points for coord in pos])
+            msg = struct.pack(f"{len(points) * 2}f", *[coord for pos in points for coord in pos[:2]])
             msg += struct.pack(f"{len(cls)}i", *cls)
             print(f"Sending {len(points)} points and {len(cls)} class IDs")
             socket.send(msg)
