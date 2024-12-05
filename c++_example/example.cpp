@@ -19,7 +19,7 @@ int main() {
         }
 
         // Calculate the number of points
-        size_t num_points = total_size / (sizeof(float) * 3 + sizeof(int));
+        size_t num_points = total_size / (sizeof(float) * 2 + sizeof(int));
 
         std::vector<float> positions; 
         std::vector<int> class_ids; 

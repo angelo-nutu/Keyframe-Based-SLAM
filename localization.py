@@ -16,17 +16,26 @@ class_colors = {
 }
 
 yaw = np.deg2rad(0)
-cos_yaw = np.cos(yaw)
-sin_yaw = np.sin(yaw)
-x_translation = -275 + 6.25
+cos_yaw = np.around(np.cos(yaw), decimals=5)
+sin_yaw = np.around(np.sin(yaw), decimals=5)
+x_translation = - 0.275 + 0.00625
 y_translation = 0
-z_translation = 747
-trasformation_matrix = np.array([
-    [cos_yaw, 0, sin_yaw, x_translation],
-    [0, 1, 0, y_translation],
-    [-sin_yaw, 0, cos_yaw, z_translation],
+z_translation = 0.747
+
+# transformation_matrix = np.array([
+#     [-sin_yaw,0,cos_yaw,x_translation],
+#     [-cos_yaw,0,-sin_yaw,y_translation],
+#     [0,-1,0,z_translation],
+#     [0,0,0,1]
+# ])
+
+transformation_matrix = np.array([
+    [-sin_yaw,0,cos_yaw,x_translation],
+    [cos_yaw,0,sin_yaw,y_translation],
+    [0,1,0,z_translation],
     [0,0,0,1]
 ])
+
 
 def init():
     pipeline = rs.pipeline()
@@ -55,7 +64,7 @@ def get_frames(pipeline, align):
     depth_image = np.asanyarray(depth_frame.get_data())
     color_image = np.asanyarray(color_frame.get_data())
 
-    return depth_image, color_image
+    return depth_frame, depth_image, color_image
 
 def compute_bboxes_masks(color_image, boxes, masks, model_names):
     annotator = Annotator(color_image)
@@ -109,21 +118,25 @@ def depth_to_pointcloud(intrinsics, depth_frame, depth_scale):
 
     points = np.stack((x, y, z), axis=-1).reshape(-1, 3)
 
+
     return points
 
 def cam_to_com(point):
     homogeneous_point = np.append(point,1)
-    return np.matmul(trasformation_matrix,homogeneous_point)[:3]
+    return np.matmul(transformation_matrix,homogeneous_point)[:3]
 
 
 def main():
     pipeline, align, intrinsics, depth_scale, socket = init()
     model = YOLO('./best_seg.onnx', task="segment")
 
+    pointcloud = rs.pointcloud()
+
     try:
         while True:
-            depth_image, color_image = get_frames(pipeline, align)
+            depth_frame, depth_image, color_image = get_frames(pipeline, align)
             pointcloud = depth_to_pointcloud(intrinsics, depth_image, depth_scale)
+            
             if color_image is None or depth_image is None:
                 continue
 
@@ -131,15 +144,19 @@ def main():
             model_names = model.names
             points = []
             cls = []
+            print(f"Found {len(res)} boxes")
             for r in res:
                 if r.boxes.shape[0] != 0:
                     color_image, centroids, classes = compute_bboxes_masks(color_image, r.boxes, r.masks, model_names)
-                    for i in range(0, len(centroids) - 1):
+                    for i in range(0, len(centroids)):
                         cx = centroids[i][0]
                         cy = centroids[i][1]
-                        depth = extract_depth(depth_image, cx, cy)
+                        depth = depth_frame.get_distance(cx, cy)
+
+                        print(f"Depth: {depth}")
                         if depth is not None and depth != 0:
                             cv2.circle(depth_image, (cx, cy), 10, (255, 255, 255), -1)
+                            print(f"Point: {pointcloud[cy * depth_image.shape[1] + cx]}")
                             com_point = cam_to_com(pointcloud[cy * depth_image.shape[1] + cx])
 
                             print(f"Point: {com_point}")
