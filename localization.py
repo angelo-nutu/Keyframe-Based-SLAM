@@ -6,6 +6,7 @@ import pyrealsense2 as rs
 import zmq
 import msgpack
 import struct
+import time
 
 class_colors = {
     0: (255, 0, 0),
@@ -77,7 +78,7 @@ def compute_bboxes_masks(color_image, boxes, masks, model_names):
 
         annotator.box_label(b, model_names[int(c)])
 
-        if masks is not None and len(masks.xy) > 0:
+        if masks is not None and hasattr(masks, 'xy') and len(masks.xy) > 0 and len(mask.xy[0]) >= 3:
             contour = mask.xy[0].astype(np.int32).reshape(-1, 1, 2)
             overlay = np.zeros_like(color_image, dtype=np.uint8)
             cv2.fillPoly(overlay, [contour], color)
@@ -91,6 +92,9 @@ def compute_bboxes_masks(color_image, boxes, masks, model_names):
                 cv2.circle(color_image, (cx, cy), 5, (255, 255, 255), -1)
                 centroids.append((cx, cy))
                 classes.append(int(c))
+        else:
+            continue
+
     return annotator.result(), centroids, classes
 
 def extract_depth(depth_frame, cx, cy):
@@ -144,8 +148,9 @@ def main():
             model_names = model.names
             points = []
             cls = []
-            print(f"Found {len(res)} boxes")
+        
             for r in res:
+                print(f"Found {len(r.boxes)} boxes")
                 if r.boxes.shape[0] != 0:
                     color_image, centroids, classes = compute_bboxes_masks(color_image, r.boxes, r.masks, model_names)
                     for i in range(0, len(centroids)):
@@ -153,14 +158,23 @@ def main():
                         cy = centroids[i][1]
                         depth = depth_frame.get_distance(cx, cy)
 
-                        print(f"Depth: {depth}")
                         if depth is not None and depth != 0:
-                            cv2.circle(depth_image, (cx, cy), 10, (255, 255, 255), -1)
-                            print(f"Point: {pointcloud[cy * depth_image.shape[1] + cx]}")
-                            com_point = cam_to_com(pointcloud[cy * depth_image.shape[1] + cx])
+                            radius = depth*100//5 #raggio da 10 a 3, fino a 4 metri di distanza
+                            print("radius: ", radius)
 
-                            print(f"Point: {com_point}")
-                            print(f"Depth: {depth}")
+                            if depth > 15:
+                                radius = 3
+                            elif depth < 4:
+                                radius = 10
+                            else:
+                                radius = int(-(7/11)*depth+138/11)
+
+                            cv2.circle(depth_image, (cx, cy), radius, (255, 255, 255), -1)
+
+                            print(f"Point wrt cam: {pointcloud[cy * depth_image.shape[1] + cx]}")
+                            com_point = cam_to_com(pointcloud[cy * depth_image.shape[1] + cx])
+                            print(f"Point wrt com: {com_point}")
+
                             points.append(com_point.tolist())
                             cls.append(classes[i])
                             print(f"Class ID: {classes[i]}")
