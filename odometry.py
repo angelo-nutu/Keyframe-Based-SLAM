@@ -82,6 +82,18 @@ parser.add_argument(
     help = 'Choose which method ought to be used to determine the pose, with scaled values or not.'
 )
 
+parser.add_argument(
+    '--baseline', '-b',
+    action = 'store_true',
+    help = 'Enable baseline smth smth smth smth smth.'
+)
+
+parser.add_argument(
+    '--basepath', '-bp',
+    type = str,
+    help = 'If baseline is turned on, the path to the baseline .json needs to be provided'
+)
+
 args = parser.parse_args()
 
 if args.extraction == 'orb':
@@ -127,6 +139,12 @@ def init():
         profile = pipeline.start(config)
         playback = profile.get_device().as_playback()
         playback.set_real_time(True)
+
+        if args.baseline:
+            if args.basepath is None:
+                raise ValueError('Baseline was turned on but no path to the baseline json was provided.')
+            baseline_path = os.path.expanduser(args.basepath)
+            x_baseline, y_baseline = get_baseline(baseline_path)
     
     intrinsics = profile.get_stream(rs.stream.depth).as_video_stream_profile().intrinsics
     align = rs.align(rs.stream.color)
@@ -134,7 +152,13 @@ def init():
     socket = zmq.Context().socket(zmq.PUB)
     socket.bind("tcp://*:5555")
 
-    return pipeline, align, intrinsics, pointcloud, socket
+    if args.realtime:
+        return pipeline, align, intrinsics, pointcloud, socket
+    else:
+        if args.baseline:
+            return pipeline, align, intrinsics, pointcloud, socket, x_baseline, y_baseline
+        else:
+            return pipeline, align, intrinsics, pointcloud, socket
 
 def get_frames(pipeline, align, pc):
     frames = pipeline.wait_for_frames()
@@ -275,10 +299,44 @@ def solve_pnp(matches, kp1, kp2, depth_frame, K):
     
     return R, t, len(inliers)
 
+def get_baseline(baseline_path):
+    
+    with open(baseline_path, 'r') as file:
+        data = json.load(file)
+
+    x_values = data['tracksBaseline']['Povo@DV_1']['x']
+    y_values = data['tracksBaseline']['Povo@DV_1']['y']
+
+    return x_values, y_values
 
 def main():
 
-    pipeline, align, intrinsics, pointcloud, socket = init()
+    if args.realtime:
+        pipeline, align, intrinsics, pointcloud, socket = init()
+
+        #TODO: get real-time value from telemetry to define the roto-translation matrix for real-time usage
+    else:
+        if args.baseline:
+            pipeline, align, intrinsics, pointcloud, socket, x_baseline, y_baseline = init()
+        
+            #compute roto-translation wrt telemetry baseline
+            yaw = - np.pi/2 - np.arctan2(y_baseline[1] - y_baseline[0], x_baseline[1] - x_baseline[0])
+            cos_yaw = np.around(np.cos(yaw), decimals=5)
+            sin_yaw = np.around(np.sin(yaw), decimals=5)
+            x_translation = x_baseline[0]
+            y_translation = 0
+            z_translation = y_baseline[0]
+
+            transformation_matrix = np.array([
+                [-cos_yaw,   0,   -sin_yaw,  x_translation],  # Negate X
+                [       0,   1,         0,   y_translation],  # Y unchanged
+                [ sin_yaw,   0,   -cos_yaw,  z_translation],  # Negate Z
+                [       0,   0,         0,               1]
+            ])
+            
+        else:
+            pipeline, align, intrinsics, pointcloud, socket = init()
+        
     
     if args.yolo:
         model = YOLO('./best_seg.onnx', task="segment")
@@ -300,6 +358,9 @@ def main():
     trajectory_x = []
     trajectory_y = []
     trajectory_z = []
+    #TODO: unificare trajectory points
+    roto_translation_x = []
+    roto_translation_y = []
 
     avg_time = []
     start = time.time()
@@ -323,10 +384,16 @@ def main():
     matplotlib.use('TkAgg')
     plt.figure()
     plt.axis('equal')
-    plt.xlabel('X-axis')
-    plt.ylabel('Z-axis')
-    plt.title('Estimated relative trajectory')
     scatter = plt.scatter([], [], c='blue')
+    if not args.realtime and args.baseline:
+        plt.scatter(x_baseline, y_baseline, c='red')
+        plt.ylabel('Y-axis')
+        plt.title('Estimated trajectory - Baseline RF')
+
+    else:
+        plt.xlabel('X-axis')
+        plt.ylabel('Z-axis')
+        plt.title('Estimated trajectory - Camera RF')
     plt.ion()
     plt.show()
 
@@ -397,31 +464,49 @@ def main():
                     trajectory_y.append(T_curr[1, 3])
                     trajectory_z.append(-T_curr[2, 3])
 
+                    trajectory_telemetry = np.eye(4, dtype=np.float64)
+                    trajectory_telemetry[0:3, 3] = [T_curr[0, 3], T_curr[1, 3], -T_curr[2, 3]]
+                    new = transformation_matrix @ trajectory_telemetry
+                    roto_translation_x.append(new[0, 3])
+                    roto_translation_y.append(new[2,3])
+
                     avg_time.append(time.time() - start)
 
-                    print(min(trajectory_x))
+                    if args.baseline:
+                        padding = 5
+                        min_x = min(min_x, new[0,3] - padding)
+                        max_x = max(max_x, new[0,3] + padding)
+                        min_z = min(min_z, new[2,3] - padding)
+                        max_z = max(max_z, new[2,3] + padding)
+                        
+                        scatter.set_offsets(np.column_stack((roto_translation_x, roto_translation_y)))
+                        axis_range = max(max_x - min_x, max_z - min_z) 
+                        mid_x = (min_x + max_x) / 2
+                        mid_z = (min_z + max_z) / 2 
+                        plt.xlim(mid_x - axis_range / 2, mid_x + axis_range / 2)
+                        plt.ylim(mid_z - axis_range / 2, mid_z + axis_range / 2)
+                        plt.gca().set_aspect('equal', adjustable='box')
 
-                    scatter.set_offsets(np.column_stack((trajectory_x, trajectory_z)))
-                    #plt.xlim((float(min(trajectory_x) - 1), float(max(trajectory_x) + 1)))
-                    #plt.ylim((float(min(trajectory_z) - 1), float(max(trajectory_z) + 1)))
+                        plt.draw()
+                        plt.pause(0.1)
 
-                    padding = 5
-                    min_x = min(min_x, T_curr[0, 3] - padding)
-                    max_x = max(max_x, T_curr[0, 3] + padding)
-                    min_z = min(min_z, -T_curr[2, 3] - padding)
-                    max_z = max(max_z, -T_curr[2, 3] + padding)
-                    
-                    scatter.set_offsets(np.column_stack((trajectory_x, trajectory_z)))
-                    axis_range = max(max_x - min_x, max_z - min_z) 
-                    mid_x = (min_x + max_x) / 2
-                    mid_z = (min_z + max_z) / 2 
-                    plt.xlim(mid_x - axis_range / 2, mid_x + axis_range / 2)
-                    plt.ylim(mid_z - axis_range / 2, mid_z + axis_range / 2)
-                    plt.gca().set_aspect('equal', adjustable='box')
+                    else:
+                        padding = 5
+                        min_x = min(min_x, T_curr[0, 3] - padding)
+                        max_x = max(max_x, T_curr[0, 3] + padding)
+                        min_z = min(min_z, -T_curr[2, 3] - padding)
+                        max_z = max(max_z, -T_curr[2, 3] + padding)
+                        
+                        scatter.set_offsets(np.column_stack((trajectory_x, trajectory_z)))
+                        axis_range = max(max_x - min_x, max_z - min_z) 
+                        mid_x = (min_x + max_x) / 2
+                        mid_z = (min_z + max_z) / 2 
+                        plt.xlim(mid_x - axis_range / 2, mid_x + axis_range / 2)
+                        plt.ylim(mid_z - axis_range / 2, mid_z + axis_range / 2)
+                        plt.gca().set_aspect('equal', adjustable='box')
 
-
-                    plt.draw()
-                    plt.pause(0.1)
+                        plt.draw()
+                        plt.pause(0.1)
 
                 else:
                     kp_new = kp_old
