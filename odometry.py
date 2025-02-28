@@ -226,16 +226,16 @@ def infere(img, depth_image, vertices):
 
 def estimate_motion(prev_pts, curr_pts, K):
     if args.extraction == 'orb':
-        E, mask = cv2.findEssentialMat(prev_pts, curr_pts, K, method=cv2.RANSAC, prob=0.9, threshold=1)
+        prob = 0.9
+        threshold = 1
     elif args.extraction in ['sift', 'surf']:
-        E, mask = cv2.findEssentialMat(prev_pts, curr_pts, K, method=cv2.RANSAC, prob=0.7, threshold=0.1)
-    mask = mask.flatten()
+        prob = 0.7
+        threshold = 0.1
 
-    inliers1 = prev_pts[mask == 1]
-    inliers2 = curr_pts[mask == 1]
-    points_used, R, T, _ = cv2.recoverPose(E, inliers1, inliers2, K)
+    E, mask = cv2.findEssentialMat(prev_pts, curr_pts, cameraMatrix=K, method=cv2.RANSAC, prob=prob, threshold=threshold)
+    points_used, R, T, mask_RP = cv2.recoverPose(E, prev_pts, curr_pts, cameraMatrix=K, mask=mask)
 
-    return R, T, points_used
+    return R, T, points_used, mask_RP.flatten().astype(np.uint8)
 
 def solve_pnp(matches, kp1, kp2, depth_frame, K):
     if not matches or len(kp1) == 0 or len(kp2) == 0:
@@ -333,7 +333,6 @@ def main():
                 continue
             
             color_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-            copy_colorImg = color_image.copy()
             
             if args.yolo:
                 points, cls = infere(color_image, depth_image, vertices)
@@ -344,58 +343,60 @@ def main():
                 print(f"Sending {len(points)} points and {len(cls)} class IDs")
                 socket.send(msg)
 
-            if count > FRAMES_TO_DISCARD:
-                
-                gray_img = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
-                kp_new, des_new = detect_features(gray_img, mask)
+            gray_img = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
+            kp_new, des_new = detect_features(gray_img, mask)
 
-                if kp_old is not None and des_old is not None:
+            if kp_old is not None and des_old is not None:
 
-                    start = time.time()
+                start = time.time()
 
-                    matches = match_features(des_old, des_new)
+                matches = match_features(des_old, des_new)
 
-                    N = len(matches) * 2//3
+                src_pts = np.float32([kp_old[m.queryIdx].pt for m in matches])
+                dst_pts = np.float32([kp_new[m.trainIdx].pt for m in matches])  # Get the corresponding points in the target image
 
-                    if SHOW: 
-                        img_matching = cv2.drawMatches(img_old,kp_old,copy_colorImg,kp_new,matches[:N],None,flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS) 
-                        cv2.imshow('Feature matching', img_matching)
-   
-                    src_pts = np.float32([kp_old[m.queryIdx].pt for m in matches[:N]])
-                    dst_pts = np.float32([kp_new[m.trainIdx].pt for m in matches[:N]])  # Get the corresponding points in the target image
-                    
+                if args.pose == 'pnp':
+                    R, T, points_used = solve_pnp(matches, kp_old, kp_new, depth_frame, K)
+                else:    
+                    R, T, points_used, pose_mask = estimate_motion(src_pts, dst_pts, K)   
+
+                if SHOW:
                     if args.pose == 'pnp':
-                        R, T, points_used = solve_pnp(matches, kp_old, kp_new, depth_frame, K)
-                    else:    
-                        R, T, points_used = estimate_motion(src_pts, dst_pts, K)                
-
-                    if points_used > 6:
-
-                        # R and T are relative between first and second frame, not in global unit
-
-                        T_prev = poses[-1]
-                        T_rel = np.eye(4, dtype=np.float64)
-                        T_rel[0:3, 0:3] = R
-                        T_rel[0:3, 3] = T.flatten()
-
-                        T_curr = T_prev @ T_rel
-                        poses.append(T_curr)
-
-                        trajectory_x.append(T_curr[0, 3])
-                        trajectory_y.append(T_curr[1, 3])
-                        trajectory_z.append(T_curr[2, 3])
-
-                        avg_time.append(time.time() - start)
+                        N = len(kp_old)*2//3
+                        img_matching = cv2.drawMatches(gray_img_old,kp_old,gray_img,kp_new,matches[:N],None,matchColor=(0, 255, 0), flags=2)
+                        cv2.imshow('First 2/3 of feature matches', img_matching)
                     else:
-                        kp_new = kp_old
-                        des_new = des_old
-                        copy_colorImg = img_old
-                        depth_frame = depthFrame_old
+                        img_matching = cv2.drawMatches(gray_img_old,kp_old,gray_img,kp_new,matches[:],None,matchColor=(0, 255, 0), matchesMask=pose_mask.ravel().tolist(), flags=2)
+                        cv2.imshow('Feature matching used to compute position', img_matching)             
 
-                kp_old = kp_new
-                des_old = des_new
-                img_old = copy_colorImg
-                depthFrame_old = depth_frame
+                if points_used > 15:
+
+                    # R and T are relative between first and second frame, not in global unit
+
+                    T_prev = poses[-1]
+                    T_rel = np.eye(4, dtype=np.float64)
+                    T_rel[0:3, 0:3] = R
+                    T_rel[0:3, 3] = T.flatten()
+
+                    T_curr = T_prev @ T_rel
+                    poses.append(T_curr)
+
+                    trajectory_x.append(T_curr[0, 3])
+                    trajectory_y.append(T_curr[1, 3])
+                    trajectory_z.append(-T_curr[2, 3])
+
+                    avg_time.append(time.time() - start)
+
+                else:
+                    kp_new = kp_old
+                    des_new = des_old
+                    gray_img = gray_img_old
+                    depth_frame = depthFrame_old
+
+            kp_old = kp_new
+            des_old = des_new
+            gray_img_old = gray_img
+            depthFrame_old = depth_frame
 
 
             if SHOW:
