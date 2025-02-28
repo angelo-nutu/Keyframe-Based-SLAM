@@ -120,13 +120,13 @@ def init():
         config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
         config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 30)
         profile = pipeline.start(config)
-        playback = profile.get_device().as_playback()
-        playback.set_real_time(True)
     else:
         if args.path is None:
             raise ValueError('--realtime was set to false but the PATH of the rosbg to replay wasn\'t provided!\n Use --path PATH or -p PATH to specify the location.')
         config.enable_device_from_file(os.path.expanduser(args.path))
         profile = pipeline.start(config)
+        playback = profile.get_device().as_playback()
+        playback.set_real_time(True)
     
     intrinsics = profile.get_stream(rs.stream.depth).as_video_stream_profile().intrinsics
     align = rs.align(rs.stream.color)
