@@ -10,6 +10,7 @@ import os
 import time
 import matplotlib.pyplot as plt
 import json
+import matplotlib
 
 SHOW = True
 FRAMES_TO_DISCARD = 400
@@ -272,7 +273,6 @@ def solve_pnp(matches, kp1, kp2, depth_frame, K):
     _, r, t, inliers = cv2.solvePnPRansac(obj_points, img_points, K, None)
     R, _ = cv2.Rodrigues(r)
     
-    print(f"len(inliers): {len(inliers)}")
     return R, t, len(inliers)
 
 
@@ -285,7 +285,6 @@ def main():
 
     kp_old = None
     des_old = None
-    img_old = None
 
     fx = intrinsics.fx  
     fy = intrinsics.fy  
@@ -321,13 +320,26 @@ def main():
     cv2.drawContours(mask, [triangle_cnt], 0, (255), thickness=-1)
     mask = cv2.bitwise_not(mask)
 
+    matplotlib.use('TkAgg')
+    plt.figure()
+    plt.axis('equal')
+    plt.xlabel('X-axis')
+    plt.ylabel('Z-axis')
+    plt.title('Estimated relative trajectory')
+    scatter = plt.scatter([], [], c='blue')
+    plt.ion()
+    plt.show()
+
+    min_x, max_x = float('inf'), float('-inf')
+    min_z, max_z = float('inf'), float('-inf')
+
     try:
         while True:
 
             depth_frame, depth_image, color_image, vertices = get_frames(pipeline, align, pointcloud)
             
             count = count + 1
-            print(count)
+            print("# Frame: ", count)
 
             if color_image is None or depth_image is None:
                 continue
@@ -387,6 +399,30 @@ def main():
 
                     avg_time.append(time.time() - start)
 
+                    print(min(trajectory_x))
+
+                    scatter.set_offsets(np.column_stack((trajectory_x, trajectory_z)))
+                    #plt.xlim((float(min(trajectory_x) - 1), float(max(trajectory_x) + 1)))
+                    #plt.ylim((float(min(trajectory_z) - 1), float(max(trajectory_z) + 1)))
+
+                    padding = 5
+                    min_x = min(min_x, T_curr[0, 3] - padding)
+                    max_x = max(max_x, T_curr[0, 3] + padding)
+                    min_z = min(min_z, -T_curr[2, 3] - padding)
+                    max_z = max(max_z, -T_curr[2, 3] + padding)
+                    
+                    scatter.set_offsets(np.column_stack((trajectory_x, trajectory_z)))
+                    axis_range = max(max_x - min_x, max_z - min_z) 
+                    mid_x = (min_x + max_x) / 2
+                    mid_z = (min_z + max_z) / 2 
+                    plt.xlim(mid_x - axis_range / 2, mid_x + axis_range / 2)
+                    plt.ylim(mid_z - axis_range / 2, mid_z + axis_range / 2)
+                    plt.gca().set_aspect('equal', adjustable='box')
+
+
+                    plt.draw()
+                    plt.pause(0.1)
+
                 else:
                     kp_new = kp_old
                     des_new = des_old
@@ -411,7 +447,7 @@ def main():
                 
 
     finally:
-        print("pipe stop")
+        print("> Pipe stop")
         pipeline.stop()
 
         vo_avgTime = 0
@@ -419,21 +455,8 @@ def main():
             vo_avgTime += t
         vo_avgTime /= len(avg_time)
         print("VO - avg time per frame: ", vo_avgTime)
-        print(avg_time)
 
-        import matplotlib
-        matplotlib.use('TkAgg')
-
-        colors = np.arange(len(trajectory_x))
-        plt.figure(figsize=(8, 6))
-        scatter = plt.scatter(trajectory_x, trajectory_z, c=colors, cmap='viridis')
-        plt.colorbar(scatter)
-        plt.axis('equal')
-            
-        plt.xlabel('X-axis')
-        plt.ylabel('Z-axis')
-        plt.title('Estimated relative trajectory')
-
+        plt.ioff()
         plt.show()
 
 if __name__ == "__main__":
