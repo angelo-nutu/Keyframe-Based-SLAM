@@ -1,0 +1,18 @@
+odometry:
+  extraction: "sift" # Feature Extraction Algorithm (orb, sift, surf)
+  matching: "bf"    # Feature Matching Algorithm (bf, flann)
+  pose: "pnp"       # Pose Estimation Algorithm (pnp, emat)
+
+camera:
+  realtime: false          # Enable real-time acquisition from the camera
+  path: "../2024_12_15/16_41_35_DV_1_baseline_1.bag"  # Path to the rosbag (if real-time is off)
+# TODO: add camera configuration parameters
+
+yolo:
+  enabled: false               # Whether to run YOLO inference
+  path: "path/to/model.onnx"  # Path to the YOLO model (if enabled)
+
+telemetry:
+  enabled: false                # Enable telemetry baseline
+  path: "path/to/baseline.json" # Path to the baseline
+
