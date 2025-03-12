@@ -7,6 +7,26 @@ import zmq
 import msgpack
 import struct
 import time
+import os
+import argparse as ap
+
+parser = ap.ArgumentParser(
+    description = 'A program used to run segmentation of the cones with a trained ANN on online/pre-recorded video.'
+)
+
+parser.add_argument(
+    '--realtime', '-rt',
+    action = 'store_true',
+    help = 'Enable Real Time acquisition from RealSense camera.'
+)
+
+parser.add_argument(
+    '--path', '-p',
+    type = str,
+    help = 'If real-time is turned off, the argument locating the rosbag to replay is required.'
+)
+
+args = parser.parse_args()
 
 class_colors = {
     0: (255, 0, 0),
@@ -23,13 +43,6 @@ x_translation = - 0.275 + 0.00625
 y_translation = 0
 z_translation = 0.747
 
-# transformation_matrix = np.array([
-#     [-sin_yaw,0,cos_yaw,x_translation],
-#     [-cos_yaw,0,-sin_yaw,y_translation],
-#     [0,-1,0,z_translation],
-#     [0,0,0,1]
-# ])
-
 transformation_matrix = np.array([
     [-sin_yaw,0,cos_yaw,x_translation],
     [cos_yaw,0,sin_yaw,y_translation],
@@ -41,9 +54,18 @@ transformation_matrix = np.array([
 def init():
     pipeline = rs.pipeline()
     config = rs.config()
-    config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-    profile = pipeline.start(config)
+    
+    if args.realtime:
+        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+        config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 30)
+        profile = pipeline.start(config)
+    else:
+        if args.path is None:
+            raise ValueError('--realtime was set to false but the PATH of the rosbg to replay wasn\'t provided!\n Use --path PATH or -p PATH to specify the location.')
+        config.enable_device_from_file(os.path.expanduser(args.path))
+        profile = pipeline.start(config)
+        playback = profile.get_device().as_playback()
+        playback.set_real_time(True)
 
     depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
     intrinsics = profile.get_stream(rs.stream.depth).as_video_stream_profile().intrinsics
@@ -143,6 +165,8 @@ def main():
             
             if color_image is None or depth_image is None:
                 continue
+            
+            color_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
 
             res = model.predict(color_image, imgsz=(480, 640))
             model_names = model.names
@@ -196,6 +220,7 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord(' '):
                 cv2.destroyAllWindows()
                 break
+    
     finally:
         pipeline.stop()
 
