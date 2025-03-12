@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 import json
 import matplotlib
 
-SHOW = True
+SHOW = False
+REALTIME_TRAJECTORY = False
 FRAMES_TO_DISCARD = 400
 
 class_colors = {
@@ -45,7 +46,7 @@ parser.add_argument(
     '--extraction', '-e',
     type = str,
     default = "orb",
-    choices = ['orb', 'sift', 'surf'],
+    choices = ['orb', 'sift', 'surf', 'akaze'],
     help = 'The feature extraction algorithm (defaults to ORB).')
 
 parser.add_argument(
@@ -104,9 +105,11 @@ elif args.extraction == 'surf':
     extractor = cv2.xfeatures2d.SURF_create()
     extractor.setUpright(True)
     extractor.setExtended(True)
-    
+elif args.extraction == 'akaze':
+    extractor = cv2.AKAZE_create()
+
 if args.matching == 'bf':
-    if args.extraction == 'orb':
+    if args.extraction == 'orb' or args.extraction == 'akaze':
         matcher = cv2.BFMatcher(
             cv2.NORM_HAMMING,
             crossCheck=True
@@ -135,7 +138,7 @@ def init():
     else:
         if args.path is None:
             raise ValueError('--realtime was set to false but the PATH of the rosbg to replay wasn\'t provided!\n Use --path PATH or -p PATH to specify the location.')
-        config.enable_device_from_file(os.path.expanduser(args.path))
+        config.enable_device_from_file(os.path.expanduser(args.path), repeat_playback=False)
         profile = pipeline.start(config)
         playback = profile.get_device().as_playback()
         playback.set_real_time(True)
@@ -161,7 +164,12 @@ def init():
             return pipeline, align, intrinsics, pointcloud, socket
 
 def get_frames(pipeline, align, pc):
-    frames = pipeline.wait_for_frames()
+    try:
+        frames = pipeline.wait_for_frames()
+    except:
+        print("------------------------------------------------")
+        print("> Rosbag ended")
+        exit()
     aligned = align.process(frames)
     depth_frame = aligned.get_depth_frame()
     color_frame = aligned.get_color_frame()
@@ -264,7 +272,7 @@ def estimate_motion(prev_pts, curr_pts, K):
 
 def solve_pnp(matches, kp1, kp2, depth_frame, K):
     if not matches or len(kp1) == 0 or len(kp2) == 0:
-        return None, None
+        return None, None, None
 
     obj_points = []
     img_points = []
@@ -289,12 +297,14 @@ def solve_pnp(matches, kp1, kp2, depth_frame, K):
             img_points.append(kp2[m.trainIdx].pt)
 
     if len(obj_points) < 10:
-        return None, None
+        return None, None, None
 
     obj_points = np.array(obj_points, dtype=np.float32)
     img_points = np.array(img_points, dtype=np.float32)
 
     _, r, t, inliers = cv2.solvePnPRansac(obj_points, img_points, K, None)
+    if inliers is None:
+        return None, None, None
     R, _ = cv2.Rodrigues(r)
     
     return R, t, len(inliers)
@@ -359,8 +369,10 @@ def main():
     trajectory_y = []
     trajectory_z = []
     #TODO: unificare trajectory points
-    roto_translation_x = []
-    roto_translation_y = []
+
+    if args.baseline:
+        roto_translation_x = []
+        roto_translation_y = []
 
     avg_time = []
     start = time.time()
@@ -382,23 +394,24 @@ def main():
     mask = cv2.bitwise_not(mask)
 
     matplotlib.use('TkAgg')
-    plt.figure()
-    plt.axis('equal')
-    scatter = plt.scatter([], [], c='blue')
-    if not args.realtime and args.baseline:
-        plt.scatter(x_baseline, y_baseline, c='red')
-        plt.ylabel('Y-axis')
-        plt.title('Estimated trajectory - Baseline RF')
+    if REALTIME_TRAJECTORY:
+        plt.figure()
+        plt.axis('equal')
+        scatter = plt.scatter([], [], c='blue')
+        if not args.realtime and args.baseline:
+            plt.scatter(x_baseline, y_baseline, c='red')
+            plt.ylabel('Y-axis')
+            plt.title('Estimated trajectory - Baseline RF')
 
-    else:
-        plt.xlabel('X-axis')
-        plt.ylabel('Z-axis')
-        plt.title('Estimated trajectory - Camera RF')
-    plt.ion()
-    plt.show()
+        else:
+            plt.xlabel('X-axis')
+            plt.ylabel('Z-axis')
+            plt.title('Estimated trajectory - Camera RF')
+        plt.ion()
+        plt.show()
 
-    min_x, max_x = float('inf'), float('-inf')
-    min_z, max_z = float('inf'), float('-inf')
+        min_x, max_x = float('inf'), float('-inf')
+        min_z, max_z = float('inf'), float('-inf')
 
     try:
         while True:
@@ -423,10 +436,10 @@ def main():
                 socket.send(msg)
 
             gray_img = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
-            start_t = time.time()
+            #start_t = time.time()
             kp_new, des_new = detect_features(gray_img, mask)
-            end_t = time.time()
-            print(f"Function took {(end_t - start_t)*1000:.3f} ms")
+            #end_t = time.time()
+            #print(f"Function took {(end_t - start_t)*1000:.3f} ms")
 
             if kp_old is not None and des_old is not None:
 
@@ -451,7 +464,7 @@ def main():
                         img_matching = cv2.drawMatches(gray_img_old,kp_old,gray_img,kp_new,matches[:],None,matchColor=(0, 255, 0), matchesMask=pose_mask.ravel().tolist(), flags=2)
                         cv2.imshow('Feature matching used to compute position', img_matching)             
 
-                if points_used > 15:
+                if points_used is not None and points_used > 15:
 
                     # R and T are relative between first and second frame, not in global unit
 
@@ -467,49 +480,51 @@ def main():
                     trajectory_y.append(T_curr[1, 3])
                     trajectory_z.append(-T_curr[2, 3])
 
-                    trajectory_telemetry = np.eye(4, dtype=np.float64)
-                    trajectory_telemetry[0:3, 3] = [T_curr[0, 3], T_curr[1, 3], -T_curr[2, 3]]
-                    new = transformation_matrix @ trajectory_telemetry
-                    roto_translation_x.append(new[0, 3])
-                    roto_translation_y.append(new[2,3])
+                    if args.baseline:
+                        trajectory_telemetry = np.eye(4, dtype=np.float64)
+                        trajectory_telemetry[0:3, 3] = [T_curr[0, 3], T_curr[1, 3], -T_curr[2, 3]]
+                        new = transformation_matrix @ trajectory_telemetry
+                        roto_translation_x.append(new[0, 3])
+                        roto_translation_y.append(new[2,3])
 
                     avg_time.append(time.time() - start)
 
-                    if args.baseline:
-                        padding = 5
-                        min_x = min(min_x, new[0,3] - padding)
-                        max_x = max(max_x, new[0,3] + padding)
-                        min_z = min(min_z, new[2,3] - padding)
-                        max_z = max(max_z, new[2,3] + padding)
-                        
-                        scatter.set_offsets(np.column_stack((roto_translation_x, roto_translation_y)))
-                        axis_range = max(max_x - min_x, max_z - min_z) 
-                        mid_x = (min_x + max_x) / 2
-                        mid_z = (min_z + max_z) / 2 
-                        plt.xlim(mid_x - axis_range / 2, mid_x + axis_range / 2)
-                        plt.ylim(mid_z - axis_range / 2, mid_z + axis_range / 2)
-                        plt.gca().set_aspect('equal', adjustable='box')
+                    if REALTIME_TRAJECTORY:
+                        if args.baseline:
+                            padding = 5
+                            min_x = min(min_x, new[0,3] - padding)
+                            max_x = max(max_x, new[0,3] + padding)
+                            min_z = min(min_z, new[2,3] - padding)
+                            max_z = max(max_z, new[2,3] + padding)
+                            
+                            scatter.set_offsets(np.column_stack((roto_translation_x, roto_translation_y)))
+                            axis_range = max(max_x - min_x, max_z - min_z) 
+                            mid_x = (min_x + max_x) / 2
+                            mid_z = (min_z + max_z) / 2 
+                            plt.xlim(mid_x - axis_range / 2, mid_x + axis_range / 2)
+                            plt.ylim(mid_z - axis_range / 2, mid_z + axis_range / 2)
+                            plt.gca().set_aspect('equal', adjustable='box')
 
-                        plt.draw()
-                        plt.pause(0.1)
+                            plt.draw()
+                            plt.pause(0.1)
 
-                    else:
-                        padding = 5
-                        min_x = min(min_x, T_curr[0, 3] - padding)
-                        max_x = max(max_x, T_curr[0, 3] + padding)
-                        min_z = min(min_z, -T_curr[2, 3] - padding)
-                        max_z = max(max_z, -T_curr[2, 3] + padding)
-                        
-                        scatter.set_offsets(np.column_stack((trajectory_x, trajectory_z)))
-                        axis_range = max(max_x - min_x, max_z - min_z) 
-                        mid_x = (min_x + max_x) / 2
-                        mid_z = (min_z + max_z) / 2 
-                        plt.xlim(mid_x - axis_range / 2, mid_x + axis_range / 2)
-                        plt.ylim(mid_z - axis_range / 2, mid_z + axis_range / 2)
-                        plt.gca().set_aspect('equal', adjustable='box')
+                        else:
+                            padding = 5
+                            min_x = min(min_x, T_curr[0, 3] - padding)
+                            max_x = max(max_x, T_curr[0, 3] + padding)
+                            min_z = min(min_z, -T_curr[2, 3] - padding)
+                            max_z = max(max_z, -T_curr[2, 3] + padding)
+                            
+                            scatter.set_offsets(np.column_stack((trajectory_x, trajectory_z)))
+                            axis_range = max(max_x - min_x, max_z - min_z) 
+                            mid_x = (min_x + max_x) / 2
+                            mid_z = (min_z + max_z) / 2 
+                            plt.xlim(mid_x - axis_range / 2, mid_x + axis_range / 2)
+                            plt.ylim(mid_z - axis_range / 2, mid_z + axis_range / 2)
+                            plt.gca().set_aspect('equal', adjustable='box')
 
-                        plt.draw()
-                        plt.pause(0.1)
+                            plt.draw()
+                            plt.pause(0.1)
 
                 else:
                     kp_new = kp_old
@@ -535,7 +550,7 @@ def main():
                 
 
     finally:
-        print("> Pipe stop")
+        print("> Pipe stop\n")
         pipeline.stop()
 
         vo_avgTime = 0
@@ -543,9 +558,25 @@ def main():
             vo_avgTime += t
         vo_avgTime /= len(avg_time)
         print("VO - avg time per frame: ", vo_avgTime)
+        print("------------------------------------------------")
 
-        plt.ioff()
-        plt.show()
+        if REALTIME_TRAJECTORY:
+            plt.ioff()
+            plt.show()
+        else:
+            plt.figure()
+            plt.axis('equal')
+            if not args.realtime and args.baseline:
+                plt.scatter(roto_translation_x, roto_translation_y, c='blue')
+                plt.scatter(x_baseline, y_baseline, c='red')
+                plt.ylabel('Y-axis')
+                plt.title('Estimated trajectory - Baseline RF')
+            else:
+                plt.scatter(trajectory_x, trajectory_z, c='blue')
+                plt.xlabel('X-axis')
+                plt.ylabel('Z-axis')
+                plt.title('Estimated trajectory - Camera RF')
+            plt.show()
 
 if __name__ == "__main__":
     main()
