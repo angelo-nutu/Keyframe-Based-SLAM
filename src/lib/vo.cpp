@@ -26,7 +26,11 @@ VO::VO(Config config) {
     }
 
     if (config.matching == "bf") {
-        matcher = cv::BFMatcher::create();
+        if (config.extraction == "orb") {
+            matcher = cv::BFMatcher::create(cv::NORM_HAMMING, true);
+        }else if (config.extraction == "sift" or config.extraction == "surf") {
+            matcher = cv::BFMatcher::create(cv::NORM_L2, true);
+        }
     } else if (config.matching == "flann") {
         matcher = cv::FlannBasedMatcher::create();
     } else {
@@ -76,6 +80,11 @@ VO::VO(Config config) {
 void VO::run() {
     rs2::align align(RS2_STREAM_COLOR);
 
+    std::vector<cv::KeyPoint> keypoints_prev;
+    cv::Mat descriptors_prev;
+    cv::Mat color_prev;
+    
+
     while (true) {
         rs2::frameset frames = pipeline.wait_for_frames();
         frames = align.process(frames);
@@ -123,8 +132,6 @@ void VO::run() {
             }));
         }
 
-        
-
         /* COLLECT RESULTS */
         std::vector<cv::KeyPoint> keypoints;
         cv::Mat descriptors;
@@ -144,6 +151,49 @@ void VO::run() {
         /* VISUALIZE KEYPOINTS */
         cv::drawKeypoints(color, keypoints, color, cv::Scalar::all(-1));
         output(color, depth);
+
+        if (!keypoints_prev.empty() && !descriptors_prev.empty()){
+            /* FEATURE MATCHING */
+            std::vector<cv::DMatch> matches;
+            auto overhead_start = std::chrono::high_resolution_clock::now();
+            matcher->match(descriptors_prev, descriptors, matches);
+            auto overhead_end = std::chrono::high_resolution_clock::now();
+            std::cout << "Feature matching overhead: "
+                        << std::chrono::duration_cast<std::chrono::milliseconds>(overhead_end - overhead_start).count()
+                        << " ms" << std::endl;
+
+            std::sort(matches.begin(), matches.end(), [](const cv::DMatch &a, const cv::DMatch &b) {
+                return a.distance < b.distance;
+            });
+
+            std::vector<cv::DMatch> valid_matches;
+            std::vector<cv::Point2f> src_pts;
+            std::vector<cv::Point2f> dst_pts;
+            for (const auto& m : matches) {
+                if (m.queryIdx >= 0 && m.queryIdx < static_cast<int>(keypoints_prev.size()) &&
+                    m.trainIdx >= 0 && m.trainIdx < static_cast<int>(keypoints.size())) {
+                    
+                    src_pts.push_back(keypoints_prev[m.queryIdx].pt);
+                    dst_pts.push_back(keypoints[m.trainIdx].pt);
+                    valid_matches.push_back(m);
+                }
+            }
+            
+            std::sort(valid_matches.begin(), valid_matches.end(), [](const cv::DMatch& a, const cv::DMatch& b) {
+                return a.distance < b.distance; 
+            });
+
+            cv::Mat img_matches;
+            cv::drawMatches(color_prev, keypoints_prev, color, keypoints, valid_matches, img_matches);
+
+            cv::imshow("Matches", img_matches);
+            cv::waitKey(1);
+
+        }
+        color.copyTo(color_prev);
+        keypoints_prev = keypoints;
+        descriptors_prev = descriptors;
+
     }
 }
 
