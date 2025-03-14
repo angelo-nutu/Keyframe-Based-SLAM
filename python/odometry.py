@@ -436,10 +436,7 @@ def main():
                 socket.send(msg)
 
             gray_img = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
-            #start_t = time.time()
             kp_new, des_new = detect_features(gray_img, mask)
-            #end_t = time.time()
-            #print(f"Function took {(end_t - start_t)*1000:.3f} ms")
 
             if kp_old is not None and des_old is not None:
 
@@ -447,12 +444,12 @@ def main():
 
                 matches = match_features(des_old, des_new)
 
-                src_pts = np.float32([kp_old[m.queryIdx].pt for m in matches])
-                dst_pts = np.float32([kp_new[m.trainIdx].pt for m in matches])  # Get the corresponding points in the target image
-
                 if args.pose == 'pnp':
                     R, T, points_used = solve_pnp(matches, kp_old, kp_new, depth_frame, K)
-                else:    
+                else:   
+                    src_pts = np.float32([kp_old[m.queryIdx].pt for m in matches])
+                    dst_pts = np.float32([kp_new[m.trainIdx].pt for m in matches])  # Get the corresponding points in the target image
+ 
                     R, T, points_used, pose_mask = estimate_motion(src_pts, dst_pts, K)   
 
                 if SHOW:
@@ -530,12 +527,10 @@ def main():
                     kp_new = kp_old
                     des_new = des_old
                     gray_img = gray_img_old
-                    depth_frame = depthFrame_old
 
             kp_old = kp_new
             des_old = des_new
             gray_img_old = gray_img
-            depthFrame_old = depth_frame
 
 
             if SHOW:
