@@ -51,11 +51,30 @@ VO::VO(Config config) {
     }
 
     /* MASK CREATION FOR KEYPOINTS DETECTION */
-    pipeline.start(cfg);
+    rs2::pipeline_profile profile = pipeline.start(cfg);
+
     std::cout << "VO initialized and Realsense pipeline started" << std::endl;
 
     rs2::frameset frames = pipeline.wait_for_frames();
     rs2::frame color_frame = frames.get_color_frame();
+
+    auto depth_stream = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::video_stream_profile>();
+    rs2_intrinsics intrinsics = depth_stream.get_intrinsics();
+
+    K = (cv::Mat_<double>(3,3) << intrinsics.fx,  0, intrinsics.ppx,
+                                          0, intrinsics.fy, intrinsics.ppy,
+                                          0,  0,  1);
+
+    // // Print intrinsics
+    // std::cout << "Width: " << intrinsics.width << ", Height: " << intrinsics.height << std::endl;
+    // std::cout << "Fx: " << intrinsics.fx << ", Fy: " << intrinsics.fy << std::endl;
+    // std::cout << "Cx: " << intrinsics.ppx << ", Cy: " << intrinsics.ppy << std::endl;
+    // std::cout << "Distortion Model: " << intrinsics.model << std::endl;
+    // std::cout << "Distortion Coefficients: ";
+    // for (double coeff : intrinsics.coeffs) {
+    //     std::cout << coeff << " ";
+    // }
+    // std::cout << std::endl;
 
     const int width = color_frame.as<rs2::video_frame>().get_width();
     const int height = color_frame.as<rs2::video_frame>().get_height();
@@ -75,6 +94,8 @@ VO::VO(Config config) {
         cv::Mat mask_portion = tri_mask(cv::Range(start_row, end_row), cv::Range::all());
         mask.push_back(mask_portion);
     }
+
+    poses.push_back(cv::Mat::eye(4, 4, CV_64F));
 }
 
 void VO::run() {
@@ -83,8 +104,10 @@ void VO::run() {
     std::vector<cv::KeyPoint> keypoints_prev;
     cv::Mat descriptors_prev;
     cv::Mat color_prev;
-    
 
+    bool finished = false;
+    bool start_vo = true;
+    
     while (true) {
         rs2::frameset frames = pipeline.wait_for_frames();
         frames = align.process(frames);
@@ -114,7 +137,6 @@ void VO::run() {
             futures.push_back(std::async(std::launch::async, [this, image_portion, i, start_row] {
                 std::vector<cv::KeyPoint> keypoints;
                 cv::Mat descriptors;
-
                 
                 auto overhead_start = std::chrono::high_resolution_clock::now();
                 extractor->detectAndCompute(image_portion, mask[i], keypoints, descriptors);
@@ -142,7 +164,7 @@ void VO::run() {
         }
 
         auto end = std::chrono::high_resolution_clock::now();
-        std::cout << "Feature extraction took "
+        std::cout << "> Feature extraction took "
                   << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
                   << " ms" << std::endl;
 
@@ -152,29 +174,34 @@ void VO::run() {
         cv::drawKeypoints(color, keypoints, color, cv::Scalar::all(-1));
         output(color, depth);
 
-        if (!keypoints_prev.empty() && !descriptors_prev.empty()){
+        if (start_vo) {
+            finished = true;
+            start_vo = false;
+        } else {
             /* FEATURE MATCHING */
             std::vector<cv::DMatch> matches;
             auto overhead_start = std::chrono::high_resolution_clock::now();
             matcher->match(descriptors_prev, descriptors, matches);
             auto overhead_end = std::chrono::high_resolution_clock::now();
-            std::cout << "Feature matching overhead: "
+            std::cout << "> Feature matching took "
                         << std::chrono::duration_cast<std::chrono::milliseconds>(overhead_end - overhead_start).count()
                         << " ms" << std::endl;
+
+            std::cout << "Number of matches found: " << matches.size() << std::endl;
 
             std::sort(matches.begin(), matches.end(), [](const cv::DMatch &a, const cv::DMatch &b) {
                 return a.distance < b.distance;
             });
 
             std::vector<cv::DMatch> valid_matches;
-            std::vector<cv::Point2f> src_pts;
-            std::vector<cv::Point2f> dst_pts;
+            // std::vector<cv::Point2f> src_pts;
+            // std::vector<cv::Point2f> dst_pts;
             for (const auto& m : matches) {
                 if (m.queryIdx >= 0 && m.queryIdx < static_cast<int>(keypoints_prev.size()) &&
                     m.trainIdx >= 0 && m.trainIdx < static_cast<int>(keypoints.size())) {
                     
-                    src_pts.push_back(keypoints_prev[m.queryIdx].pt);
-                    dst_pts.push_back(keypoints[m.trainIdx].pt);
+                    // src_pts.push_back(keypoints_prev[m.queryIdx].pt);
+                    // dst_pts.push_back(keypoints[m.trainIdx].pt);
                     valid_matches.push_back(m);
                 }
             }
@@ -183,16 +210,82 @@ void VO::run() {
                 return a.distance < b.distance; 
             });
 
+            std::cout << "Number of valid matches: " << valid_matches.size() << std::endl;
+
             cv::Mat img_matches;
             cv::drawMatches(color_prev, keypoints_prev, color, keypoints, valid_matches, img_matches);
 
             cv::imshow("Matches", img_matches);
             cv::waitKey(1);
 
+            /* PNP */
+
+            if (valid_matches.size() > 0 && keypoints_prev.size() > 0 && keypoints.size() > 0) {
+
+                std::vector<cv::Point3f> obj_points;
+                std::vector<cv::Point2f> img_points;
+                
+                for (cv::DMatch match : valid_matches) {
+                    if (match.queryIdx < keypoints_prev.size() &&  match.trainIdx < keypoints.size() ) {
+                        cv::KeyPoint keypoint = keypoints_prev[match.queryIdx];
+                        int u = static_cast<int>(keypoint.pt.x); 
+                        int v = static_cast<int>(keypoint.pt.y);
+
+                        if (u > 0 && v > 0 && u < depth_frame.as<rs2::video_frame>().get_height() && v < depth_frame.as<rs2::video_frame>().get_width()) {
+                            double depth_value = depth.at<uint16_t>(v, u) * 0.001;;
+                            
+                            if (depth_value > 0) {
+                                double x = (u - K.at<double>(0,2)) * depth_value / K.at<double>(0,0);
+                                double y = (v - K.at<double>(1,2)) * depth_value / K.at<double>(1,1);
+                                obj_points.push_back(cv::Point3f(x, y, depth_value));
+                                img_points.push_back(cv::Point2f(keypoints[match.trainIdx].pt));
+
+                            }
+                        }
+                    }
+                }
+
+                if (obj_points.size() >= 10) {
+                    cv::Mat distCoeffs = cv::Mat::zeros(4, 1, CV_64F);  // Assuming no distortion
+                    // TODO: decide whether to keep the previous line here, or to take it out of the while-loop
+                    cv::Mat rvec, tvec, R, T;
+                    std::vector<int> inliers;
+                    auto overhead_start = std::chrono::high_resolution_clock::now();
+                    bool success = cv::solvePnPRansac(obj_points, img_points, K, distCoeffs, rvec, tvec, inliers);
+                    auto overhead_end = std::chrono::high_resolution_clock::now();
+                    std::cout << "> PnP took "
+                                << std::chrono::duration_cast<std::chrono::milliseconds>(overhead_end - overhead_start).count()
+                                << " ms" << std::endl;
+                    
+                    std::cout << "Number of inliers found: " << inliers.size() << std::endl;
+
+                    if (success ) {
+                        cv::Rodrigues(rvec, R);
+                        T = tvec;
+                        finished = true;
+
+                        /* COMPUTE THE POSE */
+                        cv::Mat T_rel = cv::Mat::eye(4, 4, CV_64F);
+                        R.copyTo(T_rel(cv::Rect(0, 0, 3, 3))); 
+                        T.copyTo(T_rel(cv::Rect(3, 0, 1, 3))); 
+
+                        cv::Mat T = poses.back() * T_rel;
+                        poses.push_back(T);
+                        trajectory.push_back(cv::Point2f(T.at<double>(0,3), -T.at<double>(3,3)));
+                    }
+
+                }
+            }
         }
-        color.copyTo(color_prev);
-        keypoints_prev = keypoints;
-        descriptors_prev = descriptors;
+
+        if (finished) {
+            color_prev = color.clone();
+            keypoints_prev = keypoints;
+            descriptors_prev = descriptors;
+            finished = false;
+        }
+
+        std::cout <<  std::endl << "*************************************************" << std::endl << std::endl;
 
     }
 }

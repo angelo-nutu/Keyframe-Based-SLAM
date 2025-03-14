@@ -38,6 +38,10 @@ private:
     cv::Ptr<cv::DescriptorMatcher> matcher;
 
     std::vector<cv::Mat> mask;
+    cv::Mat K;
+
+    std::vector<cv::Mat> poses;
+    std::vector<cv::Point2f> trajectory;
 };
 
 #endif
