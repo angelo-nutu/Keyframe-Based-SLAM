@@ -6,6 +6,8 @@
 #include <cctype>
 #include <string>
 #include <yaml-cpp/yaml.h>
+#include <raylib.h>
+
 
 class Config{    
 public:

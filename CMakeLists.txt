@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 add_subdirectory(external/yaml-cpp) 
+add_subdirectory(external/raylib) 
 
 find_package(OpenCV REQUIRED)
 find_package(realsense2 REQUIRED)
@@ -22,6 +23,7 @@ target_include_directories(lib
     ${OpenCV_INCLUDE_DIRS}
     ${realsense2_INCLUDE_DIR}
     external/yaml-cpp/include
+    external/raylib/src
 )
 
 add_executable(odometry
@@ -34,5 +36,6 @@ target_link_libraries(odometry
     ${OpenCV_LIBS}
     ${realsense2_LIBRARY}
     yaml-cpp
+    raylib
 )
 
