@@ -20,7 +20,7 @@ public:
 
     void run();
     
-    void output(cv::Mat color, cv::Mat depth);
+    void output(cv::Mat color, cv::Mat depth, cv::Mat match);
     
     ~VO();
     

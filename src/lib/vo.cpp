@@ -103,7 +103,7 @@ void VO::run() {
 
     std::vector<cv::KeyPoint> keypoints_prev;
     cv::Mat descriptors_prev;
-    cv::Mat color_prev;
+    cv::Mat color_gray_prev;
 
     bool finished = false;
     bool start_vo = true;
@@ -184,10 +184,6 @@ void VO::run() {
 
         std::cout << "Number of keypoints: " << keypoints.size() << std::endl;
 
-        /* VISUALIZE KEYPOINTS */
-        cv::drawKeypoints(color, keypoints, color, cv::Scalar::all(-1));
-        output(color, depth);
-
         if (start_vo) {
             finished = true;
             start_vo = false;
@@ -226,11 +222,11 @@ void VO::run() {
 
             std::cout << "Number of valid matches: " << valid_matches.size() << std::endl;
 
+            /* VISUALIZE KEYPOINTS and MATCHING */
+            cv::drawKeypoints(color, keypoints, color, cv::Scalar::all(-1));
             cv::Mat img_matches;
-            cv::drawMatches(color_prev, keypoints_prev, color, keypoints, valid_matches, img_matches);
-
-            cv::imshow("Matches", img_matches);
-            cv::waitKey(1);
+            cv::drawMatches(color_gray_prev, keypoints_prev, color_gray, keypoints, valid_matches, img_matches);
+            output(color, depth, img_matches);
 
             /* PNP */
 
@@ -329,10 +325,10 @@ void VO::run() {
                         }
 
                         // draw axis
-                        DrawLine(margin, screenHeight - margin, screenWidth - margin, screenHeight - margin, WHITE); // X-Axis
+                        DrawLine(margin, screenHeight - margin, screenWidth - margin, screenHeight - margin, WHITE);
                         DrawLine(margin, margin, margin, screenHeight - margin, WHITE); 
-                        DrawText("x [meters]", screenWidth - 100, screenHeight - margin + 15, 14, WHITE);
-                        DrawText("z [meters]", margin - 40, margin - 20, 14, WHITE);
+                        DrawText("x (meters)", screenWidth - 100, screenHeight - margin + 10, 14, WHITE);
+                        DrawText("z (meters)", margin - 40, margin - 20, 14, WHITE);
 
                         // draw points
                         for (cv::Point2f point : trajectory) {
@@ -352,7 +348,7 @@ void VO::run() {
         }
 
         if (finished) {
-            color_prev = color.clone();
+            color_gray_prev = color_gray.clone();
             keypoints_prev = keypoints;
             descriptors_prev = descriptors;
             finished = false;
@@ -364,7 +360,7 @@ void VO::run() {
 }
 
 
-void VO::output(cv::Mat color, cv::Mat depth) {
+void VO::output(cv::Mat color, cv::Mat depth, cv::Mat match) {
     cv::Mat color_rgb;
     cv::cvtColor(color, color_rgb, cv::COLOR_BGR2RGB);
 
@@ -372,8 +368,12 @@ void VO::output(cv::Mat color, cv::Mat depth) {
     cv::convertScaleAbs(depth, depth_u8, 0.02);
     cv::applyColorMap(depth_u8, depth_u8, cv::COLORMAP_JET);
 
+    cv::Mat top_row;
+    cv::hconcat(color_rgb, depth_u8, top_row);
+
     cv::Mat output;
-    cv::hconcat(color_rgb, depth_u8, output);
+    cv::vconcat(top_row, match, output);
+
     cv::imshow("Output", output);
 
     cv::waitKey(1);
