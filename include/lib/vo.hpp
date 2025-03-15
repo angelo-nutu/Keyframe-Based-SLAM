@@ -12,6 +12,7 @@
 #include <opencv2/xfeatures2d.hpp>
 
 #include <config.hpp>
+#include <raylib.h>
 
 class VO {
 public:
@@ -42,6 +43,7 @@ private:
 
     std::vector<cv::Mat> poses;
     std::vector<cv::Point2f> trajectory;
+
 };
 
 #endif
