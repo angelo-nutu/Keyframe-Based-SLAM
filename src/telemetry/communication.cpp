@@ -55,19 +55,46 @@ void Communication::onMessageCallback(PAHOMQTTConnection *connection,
   if (message.getTopic() == MQTTTopics::GetTopicExtraTlmDataVehicleState(tlmData->vehicleId, "onboard").topic) {
     tlmData->data->vehicleState.deserializeFromJsonString(message.getPayload());
   } else if (message.getTopic() == MQTTTopics::GetTopicExtraTlmDataGpsMapOrigins(tlmData->vehicleId, "onboard").topic) {
-    tlmData->data->gpsMapOrigins.deserializeFromJsonString(message.getPayload());
+    tlmData->data->gpsMapOrigins.deserializeFromProtobufString(message.getPayload());
 
-    GPSMapOrigin new_origin = tlmData->data->gpsMapOrigins.origins.at(tlmData->data->gpsMapOrigins.trackLocation);
-    if (new_origin.altitude != tlmData->data->current_origin.altitude || new_origin.latitude != tlmData->data->current_origin.latitude || new_origin.longitude != tlmData->data->current_origin.longitude) {
+    auto it = tlmData->data->gpsMapOrigins.origins.find(tlmData->data->gpsMapOrigins.trackLocation);
+    if (it != tlmData->data->gpsMapOrigins.origins.end()) {
+        GPSMapOrigin new_origin = it->second;
+        if (new_origin.altitude != tlmData->data->current_origin.altitude || 
+            new_origin.latitude != tlmData->data->current_origin.latitude || 
+            new_origin.longitude != tlmData->data->current_origin.longitude  && tlmData->data->vehicleState.heading != 0) {
+            
+              double heading = tlmData->data->vehicleState.heading;
+              tlmData->data->rotoTranMat = (cv::Mat_<double>(4, 4) << 
+                -std::cos(heading),   0,  -std::sin(heading),  tlmData->data->vehicleState.x,  
+                                 0,   1,                   0,                              0,  
+                 std::sin(heading),   0,  -std::cos(heading),  tlmData->data->vehicleState.y, 
+                                 0,   0,                   0,                              1
+                );
+        }
 
-      double heading = tlmData->data->vehicleState.heading;
-      tlmData->data->rotoTranMat = (cv::Mat_<double>(4, 4) << 
-        -std::cos(heading),   0,  -std::sin(heading),  tlmData->data->vehicleState.x,  
-                         0,   1,                   0,                              0,  
-         std::sin(heading),   0,  -std::cos(heading),  tlmData->data->vehicleState.y, 
-                         0,   0,                   0,                              1
-        );
+        tlmData->data->current_origin.altitude = new_origin.altitude;
+        tlmData->data->current_origin.latitude = new_origin.latitude;
+        tlmData->data->current_origin.longitude = new_origin.longitude;
+
+
+    } else {
+        std::cerr << "Key not found: " << tlmData->data->gpsMapOrigins.trackLocation << std::endl;
     }
+
+    // GPSMapOrigin new_origin = tlmData->data->gpsMapOrigins.origins.at(tlmData->data->gpsMapOrigins.trackLocation);
+    // if (new_origin.altitude != tlmData->data->current_origin.altitude || new_origin.latitude != tlmData->data->current_origin.latitude || new_origin.longitude != tlmData->data->current_origin.longitude) {
+
+
+    //   double heading = tlmData->data->vehicleState.heading;
+    //   tlmData->data->rotoTranMat = (cv::Mat_<double>(4, 4) << 
+    //     -std::cos(heading),   0,  -std::sin(heading),  tlmData->data->vehicleState.x,  
+    //                      0,   1,                   0,                              0,  
+    //      std::sin(heading),   0,  -std::cos(heading),  tlmData->data->vehicleState.y, 
+    //                      0,   0,                   0,                              1
+    //     );
+    // }
+
 
   }
 }

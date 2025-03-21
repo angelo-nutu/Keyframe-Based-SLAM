@@ -1,5 +1,8 @@
 #include <vo.hpp>
 #include <config.hpp>
+#include <raylib.h>
+
+TelemetryData tlmData;
 
 int main(int argc, char** argv) {
     
@@ -14,7 +17,14 @@ int main(int argc, char** argv) {
 
     Config config(path);
 
-    VO vo(config);
+    std::string host = "localhost";
+    std::string vehicleId = "giorgia";
+    Communication communication(host, vehicleId, &tlmData);
+    while(communication.getConnection()->getStatus() != PAHOMQTTConnectionStatus::CONNECTED){
+        sleep(1);
+    }
+
+    VO vo(config, &tlmData, &communication);
     vo.run();
 
     return 0;

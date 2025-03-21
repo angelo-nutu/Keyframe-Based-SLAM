@@ -19,7 +19,7 @@
 
 class VO {
 public:
-    VO(Config config);
+    VO(Config config, TelemetryData* tlmData, Communication* communication);
 
     void run();
     
@@ -47,8 +47,8 @@ private:
     std::vector<cv::Mat> poses;
     std::vector<cv::Point2f> trajectory;
 
-    TelemetryData tlmData;
-    Communication comm;
+    TelemetryData* tlmData;
+    Communication* communication;
 };
 
 #endif

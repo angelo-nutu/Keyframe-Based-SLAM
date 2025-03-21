@@ -2,13 +2,15 @@
 #include <future>
 #include <atomic>
 
-VO::VO(Config config) {
+VO::VO(Config config, TelemetryData* tlmData, Communication* communication) {
     cv::setNumThreads(0);
 
     /* CONFIG FILE, BASIC ODOMETRY SETUP*/
     int n = std::thread::hardware_concurrency();
 
     config = config;
+    this->tlmData = tlmData;
+    this->communication = communication;
 
     if (config.extraction == "orb") {
         extractor = cv::ORB::create();
@@ -97,12 +99,6 @@ VO::VO(Config config) {
 
     poses.push_back(cv::Mat::eye(4, 4, CV_64F));
 
-    std::string host = "localhost";
-    std::string vehicleId = "giorgia";
-    comm = Communication(host, vehicleId, &tlmData);
-    while(comm.getConnection()->getStatus() != PAHOMQTTConnectionStatus::CONNECTED){
-        sleep(1);
-    }
 }
 
 void VO::run() {
@@ -232,6 +228,7 @@ void VO::run() {
             std::cout << "Number of valid matches: " << valid_matches.size() << std::endl;
 
             /* VISUALIZE KEYPOINTS and MATCHING */
+
             cv::drawKeypoints(color, keypoints, color, cv::Scalar::all(-1));
             cv::Mat img_matches;
             cv::drawMatches(color_gray_prev, keypoints_prev, color_gray, keypoints, valid_matches, img_matches);
@@ -258,15 +255,6 @@ void VO::run() {
                                 double y = (v - K.at<double>(1,2)) * depth_value / K.at<double>(1,1);
                                 obj_points.push_back(cv::Point3f(x, y, depth_value));
                                 img_points.push_back(cv::Point2f(keypoints[match.trainIdx].pt));
-
-                                /* SEND DATA TO TELEMETRY */
-                                cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
-                                pose.at<double>(0, 3) = x;
-                                pose.at<double>(1, 3) = 1;
-                                pose.at<double>(2, 3) = -y;
-
-                                cv::Mat res = tlmData.rotoTranMat * pose;
-                                comm.sendCoordinates(res.at<double>(0,3), res.at<double>(2,3));
                             }
                         }
                     }
@@ -300,6 +288,15 @@ void VO::run() {
                         poses.push_back(T);
                         cv::Point2f last = cv::Point2f(T.at<double>(0,3), -T.at<double>(2,3));
                         trajectory.push_back(last);
+
+                        /* SEND DATA TO TELEMETRY */
+                        cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
+                        pose.at<double>(0, 3) = T.at<double>(0,3);
+                        pose.at<double>(1, 3) = 1;
+                        pose.at<double>(2, 3) = -T.at<double>(2,3);
+
+                        cv::Mat res = tlmData->rotoTranMat * pose;
+                        communication->sendCoordinates(res.at<double>(0,3), res.at<double>(2,3));
 
                         /* DRAW THE NEW CAR POSITION */
 
