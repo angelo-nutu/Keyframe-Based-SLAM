@@ -13,7 +13,7 @@ VO::VO(Config config) {
     if (config.extraction == "orb") {
         extractor = cv::ORB::create();
     } else if (config.extraction == "sift") {
-        extractor = cv::SIFT::create(2000);
+        extractor = cv::SIFT::create();
     } else if (config.extraction == "surf") {
         cv::Ptr<cv::xfeatures2d::SURF> surf = cv::xfeatures2d::SURF::create();
         surf->setHessianThreshold(400);
@@ -189,6 +189,7 @@ void VO::run() {
             start_vo = false;
         } else {
             /* FEATURE MATCHING */
+            cv::setNumThreads(-1);
             std::vector<cv::DMatch> matches;
             auto overhead_start = std::chrono::high_resolution_clock::now();
             matcher->match(descriptors_prev, descriptors, matches);
