@@ -14,6 +14,9 @@
 #include <config.hpp>
 #include <raylib.h>
 
+#include "communication.hpp"
+#include "data.h"
+
 class VO {
 public:
     VO(Config config);
@@ -44,6 +47,8 @@ private:
     std::vector<cv::Mat> poses;
     std::vector<cv::Point2f> trajectory;
 
+    TelemetryData tlmData;
+    Communication comm;
 };
 
 #endif

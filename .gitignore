@@ -3,3 +3,4 @@ build
 2024_12_15/
 old_versions/
 .vscode
+.generated/

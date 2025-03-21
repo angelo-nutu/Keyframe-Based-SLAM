@@ -4,3 +4,15 @@
 [submodule "external/raylib"]
 	path = external/raylib
 	url = https://github.com/raysan5/raylib.git
+[submodule "external/lib-communication"]
+	path = external/lib-communication
+	url = git@github.com:eagletrt/lib-communication.git
+[submodule "external/serializers"]
+	path = external/serializers
+	url = git@github.com:eagletrt/telemetry-serializers.git
+[submodule "external/telemetry-mqtt-topics"]
+	path = external/telemetry-mqtt-topics
+	url = git@github.com:eagletrt/telemetry-mqtt-topics.git
+[submodule "external/mqtt-topics"]
+	path = external/mqtt-topics
+	url = git@github.com:eagletrt/telemetry-mqtt-topics.git

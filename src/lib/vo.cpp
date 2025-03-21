@@ -96,6 +96,13 @@ VO::VO(Config config) {
     }
 
     poses.push_back(cv::Mat::eye(4, 4, CV_64F));
+
+    std::string host = "localhost";
+    std::string vehicleId = "giorgia";
+    comm = Communication(host, vehicleId, &tlmData);
+    while(comm.getConnection()->getStatus() != PAHOMQTTConnectionStatus::CONNECTED){
+        sleep(1);
+    }
 }
 
 void VO::run() {
@@ -141,6 +148,7 @@ void VO::run() {
 
         int height = color_gray.rows;
         int n = std::thread::hardware_concurrency();
+        cv::setNumThreads(0);
 
         std::vector<std::future<ExtractionOutput>> futures;
         for (int i = 0; i < mask.size(); ++i) {
@@ -251,6 +259,14 @@ void VO::run() {
                                 obj_points.push_back(cv::Point3f(x, y, depth_value));
                                 img_points.push_back(cv::Point2f(keypoints[match.trainIdx].pt));
 
+                                /* SEND DATA TO TELEMETRY */
+                                cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
+                                pose.at<double>(0, 3) = x;
+                                pose.at<double>(1, 3) = 1;
+                                pose.at<double>(2, 3) = -y;
+
+                                cv::Mat res = tlmData.rotoTranMat * pose;
+                                comm.sendCoordinates(res.at<double>(0,3), res.at<double>(2,3));
                             }
                         }
                     }
