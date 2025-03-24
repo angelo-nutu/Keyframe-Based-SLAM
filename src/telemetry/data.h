@@ -18,6 +18,8 @@ struct TelemetryData {
 
   GPSMapOrigin current_origin;
   cv::Mat rotoTranMat;
+  bool start;
+  bool create_rotoTranMatrix;
 };
 
 #endif // DATA_H

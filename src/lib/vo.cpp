@@ -2,15 +2,14 @@
 #include <future>
 #include <atomic>
 
-VO::VO(Config config, TelemetryData* tlmData, Communication* communication) {
+VO::VO(Config config){
+
     cv::setNumThreads(0);
 
     /* CONFIG FILE, BASIC ODOMETRY SETUP*/
     int n = std::thread::hardware_concurrency();
 
-    config = config;
-    this->tlmData = tlmData;
-    this->communication = communication;
+    this->config = config;
 
     if (config.extraction == "orb") {
         extractor = cv::ORB::create();
@@ -101,6 +100,11 @@ VO::VO(Config config, TelemetryData* tlmData, Communication* communication) {
 
 }
 
+VO::VO(Config config, TelemetryData* tlmData, Communication* communication) : VO(config){
+    this->tlmData = tlmData;
+    this->communication = communication;
+}
+
 void VO::run() {
     rs2::align align(RS2_STREAM_COLOR);
 
@@ -110,22 +114,37 @@ void VO::run() {
 
     bool finished = false;
     bool start_vo = true;
+    bool condition = true;
 
+    float minX, minY, maxX, maxY, margin, padding, gridSpacingX, gridSpacingY, plottingAreaWidth, plottingAreaHeight;
+    int screenWidth, screenHeight;
+    std::cout << config.telemetry << std::endl;
+    if (!config.telemetry){
+
+        screenWidth = 800;
+        screenHeight = 600;
+        minX = std::numeric_limits<float>::infinity(); 
+        maxX = - std::numeric_limits<float>::infinity();
+        minY = std::numeric_limits<float>::infinity(); 
+        maxY = -std::numeric_limits<float>::infinity();
+        margin = 50.0f; 
+        padding = 50.0f;
+        gridSpacingX = 5.0; 
+        gridSpacingY = 5.0;
+
+        plottingAreaWidth = screenWidth - 2 * margin - 2 * padding;
+        plottingAreaHeight = screenHeight - 2 * margin - 2 * padding;
+
+        InitWindow(screenWidth, screenHeight, "Real-Time Trajectory");
+        SetTargetFPS(60);
+
+        condition = !WindowShouldClose();
+    }
     
-    const int screenWidth = 800;
-    const int screenHeight = 600;
-    float minX = std::numeric_limits<float>::infinity(), maxX = - std::numeric_limits<float>::infinity();
-    float minY = std::numeric_limits<float>::infinity(), maxY = -std::numeric_limits<float>::infinity();
-    float margin = 50.0f, padding = 50.0f;
-    float gridSpacingX = 5.0, gridSpacingY = 5.0;
-
-    const float plottingAreaWidth = screenWidth - 2 * margin - 2 * padding;
-    const float plottingAreaHeight = screenHeight - 2 * margin - 2 * padding;
-
-    InitWindow(screenWidth, screenHeight, "Real-Time Trajectory");
-    SetTargetFPS(60);
-    
-    while (!WindowShouldClose()) { //true) {
+    while (condition) {
+        if (config.telemetry){
+            this->tlmData->start = true;
+        }
         rs2::frameset frames = pipeline.wait_for_frames();
         frames = align.process(frames);
 
@@ -274,7 +293,7 @@ void VO::run() {
                     
                     std::cout << "Number of inliers found: " << inliers.size() << std::endl;
 
-                    if (success ) {
+                    if (success) {
                         cv::Rodrigues(rvec, R);
                         T = tvec;
                         finished = true;
@@ -289,72 +308,73 @@ void VO::run() {
                         cv::Point2f last = cv::Point2f(T.at<double>(0,3), -T.at<double>(2,3));
                         trajectory.push_back(last);
 
-                        /* SEND DATA TO TELEMETRY */
-                        cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
-                        pose.at<double>(0, 3) = T.at<double>(0,3);
-                        pose.at<double>(1, 3) = 1;
-                        pose.at<double>(2, 3) = -T.at<double>(2,3);
+                        if (config.telemetry){ /* SEND DATA TO TELEMETRY */
+                            cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
+                            pose.at<double>(0, 3) = T.at<double>(0,3);
+                            pose.at<double>(1, 3) = 1;
+                            pose.at<double>(2, 3) = -T.at<double>(2,3);
 
-                        cv::Mat res = tlmData->rotoTranMat * pose;
-                        communication->sendCoordinates(res.at<double>(0,3), res.at<double>(2,3));
+                            cv::Mat res = tlmData->rotoTranMat * pose;
+                            communication->sendCoordinates(res.at<double>(0,3), res.at<double>(2,3));
 
-                        /* DRAW THE NEW CAR POSITION */
-
-                        minX = (last.x < minX) ? last.x : minX;
-                        maxX = (last.x > maxX) ? last.x : maxX;
-                        minY = (last.y < minY) ? last.y : minY;
-                        maxY = (last.y > maxY) ? last.y : maxY;
-
-                        float scaleX = (screenWidth - 2 * margin - 2 * padding) / (maxX - minX);
-                        float scaleY = (screenHeight - 2 * margin - 2 * padding) / (maxY - minY);
-                        float scale = (scaleX < scaleY) ? scaleX : scaleY;
+                        } else { /* DRAW THE NEW CAR POSITION */
                         
-                        BeginDrawing();
-                        ClearBackground(BLACK);
+                            minX = (last.x < minX) ? last.x : minX;
+                            maxX = (last.x > maxX) ? last.x : maxX;
+                            minY = (last.y < minY) ? last.y : minY;
+                            maxY = (last.y > maxY) ? last.y : maxY;
 
-                        // draw x grid
-                        float converted_margin_X = (- padding - (scale == scaleY ? (plottingAreaWidth - maxX + minX)/2 : 0.0))/scale + minX;
-                        float startX = std::ceil(converted_margin_X / gridSpacingX) * gridSpacingX;
-                        float endX = (screenWidth - margin - margin - padding - (scale == scaleY ? (plottingAreaWidth - maxX + minX)/2 : 0.0))/scale + minX;
-                        for (float i = startX; i <= endX; i += gridSpacingX) {
-                            float linePlot = margin + padding + (i - minX) * scale + (scale == scaleY ? (plottingAreaWidth - maxX + minX)/2 : 0.0);
-                            DrawLine(linePlot, margin, linePlot, screenHeight - margin, DARKGRAY);
-                
-                            char xLabel[16];
-                            sprintf(xLabel, "%.1fm", i);
-                            DrawText(xLabel, linePlot - 15, screenHeight - margin + 5, 12, DARKGRAY);
+                            float scaleX = (screenWidth - 2 * margin - 2 * padding) / (maxX - minX);
+                            float scaleY = (screenHeight - 2 * margin - 2 * padding) / (maxY - minY);
+                            float scale = (scaleX < scaleY) ? scaleX : scaleY;
+                            
+                            BeginDrawing();
+                            ClearBackground(BLACK);
+
+                            // draw x grid
+                            float converted_margin_X = (- padding - (scale == scaleY ? (plottingAreaWidth - maxX + minX)/2 : 0.0))/scale + minX;
+                            float startX = std::ceil(converted_margin_X / gridSpacingX) * gridSpacingX;
+                            float endX = (screenWidth - margin - margin - padding - (scale == scaleY ? (plottingAreaWidth - maxX + minX)/2 : 0.0))/scale + minX;
+                            for (float i = startX; i <= endX; i += gridSpacingX) {
+                                float linePlot = margin + padding + (i - minX) * scale + (scale == scaleY ? (plottingAreaWidth - maxX + minX)/2 : 0.0);
+                                DrawLine(linePlot, margin, linePlot, screenHeight - margin, DARKGRAY);
+                    
+                                char xLabel[16];
+                                sprintf(xLabel, "%.1fm", i);
+                                DrawText(xLabel, linePlot - 15, screenHeight - margin + 5, 12, DARKGRAY);
+                            }
+                            
+                            // draw z grid
+                            float converted_margin_Y = (screenHeight - (screenHeight - margin) - margin - padding - (scale == scaleX ? (plottingAreaHeight - maxY + minY)/2 : 0.0))/scale + minY;                      
+                            float startY = std::ceil(converted_margin_Y / gridSpacingY) * gridSpacingY;
+                            float endY = (screenHeight - (margin) - margin - padding - (scale == scaleX ? (plottingAreaHeight - maxY + minY)/2 : 0.0))/scale + minY;
+                            for (float i = startY; i <= endY; i += gridSpacingY) {
+                                float linePlot = screenHeight - (margin + padding + (i - minY) * scale + (scale == scaleX ? (plottingAreaHeight - maxY + minY)/2 : 0.0));
+                                DrawLine(margin, linePlot, screenWidth - margin, linePlot, DARKGRAY);
+
+                                char yLabel[16];
+                                sprintf(yLabel, "%.1fm", i);
+                                DrawText(yLabel, margin - 45, linePlot - 5, 12, DARKGRAY);
+                            }
+
+                            // draw axis
+                            DrawLine(margin, screenHeight - margin, screenWidth - margin, screenHeight - margin, WHITE);
+                            DrawLine(margin, margin, margin, screenHeight - margin, WHITE); 
+                            DrawText("x (meters)", screenWidth - 100, screenHeight - margin + 10, 14, WHITE);
+                            DrawText("z (meters)", margin - 40, margin - 20, 14, WHITE);
+
+                            // draw points
+                            for (cv::Point2f point : trajectory) {
+                                float screenX = margin + padding + (point.x - minX) * scale + (scale == scaleY ? (plottingAreaWidth - maxX + minX)/2 : 0);
+                                float screenY = screenHeight - (margin + padding + (point.y - minY) * scale + (scale == scaleX ? (plottingAreaHeight - maxY + minY)/2 : 0));
+                                DrawCircle((int)screenX, (int)screenY, 3, YELLOW);
+                            }
+                            float screenX = margin + padding + (last.x - minX) * scale + (scale == scaleY ? (plottingAreaWidth - maxX + minX)/2 : 0);
+                            float screenY = screenHeight - (margin + padding + (last.y - minY) * scale + (scale == scaleX ? (plottingAreaHeight - maxY + minY)/2 : 0));
+                            DrawCircle((int)screenX, (int)screenY, 4, BLUE);
+                    
+                            EndDrawing();
                         }
-                        
-                        // draw z grid
-                        float converted_margin_Y = (screenHeight - (screenHeight - margin) - margin - padding - (scale == scaleX ? (plottingAreaHeight - maxY + minY)/2 : 0.0))/scale + minY;                      
-                        float startY = std::ceil(converted_margin_Y / gridSpacingY) * gridSpacingY;
-                        float endY = (screenHeight - (margin) - margin - padding - (scale == scaleX ? (plottingAreaHeight - maxY + minY)/2 : 0.0))/scale + minY;
-                        for (float i = startY; i <= endY; i += gridSpacingY) {
-                            float linePlot = screenHeight - (margin + padding + (i - minY) * scale + (scale == scaleX ? (plottingAreaHeight - maxY + minY)/2 : 0.0));
-                            DrawLine(margin, linePlot, screenWidth - margin, linePlot, DARKGRAY);
-
-                            char yLabel[16];
-                            sprintf(yLabel, "%.1fm", i);
-                            DrawText(yLabel, margin - 45, linePlot - 5, 12, DARKGRAY);
-                        }
-
-                        // draw axis
-                        DrawLine(margin, screenHeight - margin, screenWidth - margin, screenHeight - margin, WHITE);
-                        DrawLine(margin, margin, margin, screenHeight - margin, WHITE); 
-                        DrawText("x (meters)", screenWidth - 100, screenHeight - margin + 10, 14, WHITE);
-                        DrawText("z (meters)", margin - 40, margin - 20, 14, WHITE);
-
-                        // draw points
-                        for (cv::Point2f point : trajectory) {
-                            float screenX = margin + padding + (point.x - minX) * scale + (scale == scaleY ? (plottingAreaWidth - maxX + minX)/2 : 0);
-                            float screenY = screenHeight - (margin + padding + (point.y - minY) * scale + (scale == scaleX ? (plottingAreaHeight - maxY + minY)/2 : 0));
-                            DrawCircle((int)screenX, (int)screenY, 3, YELLOW);
-                        }
-                        float screenX = margin + padding + (last.x - minX) * scale + (scale == scaleY ? (plottingAreaWidth - maxX + minX)/2 : 0);
-                        float screenY = screenHeight - (margin + padding + (last.y - minY) * scale + (scale == scaleX ? (plottingAreaHeight - maxY + minY)/2 : 0));
-                        DrawCircle((int)screenX, (int)screenY, 4, BLUE);
-                
-                        EndDrawing();
                     }
 
                 }
@@ -370,6 +390,9 @@ void VO::run() {
 
         std::cout <<  std::endl << "*************************************************" << std::endl << std::endl;
 
+        if (!config.telemetry){
+            condition = !WindowShouldClose();
+        }
     }
 }
 
@@ -396,7 +419,9 @@ void VO::output(cv::Mat color, cv::Mat depth, cv::Mat match) {
 VO::~VO() {
     pipeline.stop();
     cv::destroyAllWindows();
-    CloseWindow();
+    if(config.telemetry){
+        CloseWindow();
+    }
 
     std::cout << "Realsense pipeline stopped" << std::endl;
 }

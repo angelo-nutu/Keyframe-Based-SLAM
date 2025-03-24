@@ -15,17 +15,25 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    tlmData.create_rotoTranMatrix = false;
+    tlmData.start = false;
+
     Config config(path);
 
-    std::string host = "localhost";
-    std::string vehicleId = "giorgia";
-    Communication communication(host, vehicleId, &tlmData);
-    while(communication.getConnection()->getStatus() != PAHOMQTTConnectionStatus::CONNECTED){
-        sleep(1);
+    if (config.telemetry){
+        std::string host = "localhost";
+        std::string vehicleId = "giorgia";
+        Communication communication(host, vehicleId, &tlmData);
+        while(communication.getConnection()->getStatus() != PAHOMQTTConnectionStatus::CONNECTED){
+            sleep(1);
+        }
+        VO vo(config, &tlmData, &communication);
+        vo.run();
     }
-
-    VO vo(config, &tlmData, &communication);
-    vo.run();
+    else{
+        VO vo(config);
+        vo.run();
+    }
 
     return 0;
 }

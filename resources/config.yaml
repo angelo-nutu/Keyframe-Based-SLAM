@@ -1,6 +1,6 @@
 odometry:
   extraction: "sift" # Feature Extraction Algorithm (orb, sift, surf)
-  matching: "bf"    # Feature Matching Algorithm (bf, flann)
+  matching: "flann"    # Feature Matching Algorithm (bf, flann)
   pose: "pnp"       # Pose Estimation Algorithm (pnp, emat)
 
 camera:
@@ -13,6 +13,5 @@ yolo:
   path: "path/to/model.onnx"  # Path to the YOLO model (if enabled)
 
 telemetry:
-  enabled: false                # Enable telemetry baseline
-  path: "path/to/baseline.json" # Path to the baseline
+  enabled: false                # Enable telemetry communication
 

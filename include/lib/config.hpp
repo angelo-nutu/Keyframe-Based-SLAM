@@ -23,8 +23,7 @@ public:
     bool yolo;
     std::string model_path;
 
-    bool baseline;
-    std::string baseline_path;
+    bool telemetry;
 private:
 
 };
