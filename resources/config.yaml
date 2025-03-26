@@ -13,5 +13,5 @@ yolo:
   path: "path/to/model.onnx"  # Path to the YOLO model (if enabled)
 
 telemetry:
-  enabled: false                # Enable telemetry communication
+  enabled: true                # Enable telemetry communication
 

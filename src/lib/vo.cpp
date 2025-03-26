@@ -121,7 +121,7 @@ void VO::run() {
     std::cout << config.telemetry << std::endl;
     if (!config.telemetry){
 
-        screenWidth = 800;
+        screenWidth = 800;                 
         screenHeight = 600;
         minX = std::numeric_limits<float>::infinity(); 
         maxX = - std::numeric_limits<float>::infinity();
@@ -311,11 +311,11 @@ void VO::run() {
                         if (config.telemetry){ /* SEND DATA TO TELEMETRY */
                             cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
                             pose.at<double>(0, 3) = T.at<double>(0,3);
-                            pose.at<double>(1, 3) = 1;
+                            pose.at<double>(1, 3) = 0;
                             pose.at<double>(2, 3) = -T.at<double>(2,3);
 
                             cv::Mat res = tlmData->rotoTranMat * pose;
-                            communication->sendCoordinates(res.at<double>(0,3), res.at<double>(2,3));
+                            communication->sendCoordinates(res.at<double>(0,3), res.at<double>(1,3));
 
                         } else { /* DRAW THE NEW CAR POSITION */
                         

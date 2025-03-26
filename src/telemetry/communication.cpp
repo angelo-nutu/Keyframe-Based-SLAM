@@ -59,11 +59,12 @@ void Communication::onMessageCallback(PAHOMQTTConnection *connection,
       
       if(tlmData->data->create_rotoTranMatrix){
         double heading = tlmData->data->vehicleState.heading;
+        double yaw = (180 - cv::abs(heading)) * ((heading > 0 ? +1 : -1));
         tlmData->data->rotoTranMat = (cv::Mat_<double>(4, 4) << 
-          -std::cos(heading),   0,  -std::sin(heading),  tlmData->data->vehicleState.x,  
-                          0,   1,                   0,                              0,  
-          std::sin(heading),   0,  -std::cos(heading),  tlmData->data->vehicleState.y, 
-                          0,   0,                   0,                              1
+           std::cos(yaw),    std::sin(yaw),  0, tlmData->data->vehicleState.x,  
+                       0,                0, -1, tlmData->data->vehicleState.y,  
+           std::sin(yaw),   -std::cos(yaw),  0,                             0,
+                       0,                0,  0,                             1
           );
           
         tlmData->data->create_rotoTranMatrix = false;
@@ -110,30 +111,14 @@ void Communication::onMessageCallback(PAHOMQTTConnection *connection,
           << "#################################################" << std::endl << std::endl;
     }
 
-    // GPSMapOrigin new_origin = tlmData->data->gpsMapOrigins.origins.at(tlmData->data->gpsMapOrigins.trackLocation);
-    // if (new_origin.altitude != tlmData->data->current_origin.altitude || new_origin.latitude != tlmData->data->current_origin.latitude || new_origin.longitude != tlmData->data->current_origin.longitude) {
-
-
-    //   double heading = tlmData->data->vehicleState.heading;
-    //   tlmData->data->rotoTranMat = (cv::Mat_<double>(4, 4) << 
-    //     -std::cos(heading),   0,  -std::sin(heading),  tlmData->data->vehicleState.x,  
-    //                      0,   1,                   0,                              0,  
-    //      std::sin(heading),   0,  -std::cos(heading),  tlmData->data->vehicleState.y, 
-    //                      0,   0,                   0,                              1
-    //     );
-    // }
-
-
   }
 }
 
 bool Communication::sendCoordinates(double x, double y) {
   Serializers::Data::ValuesMap valuesMap;
   valuesMap.timestamp.values.push_back(getTimestampMicroseconds());
-  // valuesMap.valuesMap["x"].values.push_back(x);
-  // valuesMap.valuesMap["y"].values.push_back(y);
-  valuesMap.valuesMap["remote_pos_x"].values.push_back(x);
-  valuesMap.valuesMap["remote_pos_y"].values.push_back(y);
+  valuesMap.valuesMap["x"].values.push_back(x);
+  valuesMap.valuesMap["y"].values.push_back(y);
   Serializers::Data::TimeValuesPack valuesPack;
   valuesPack.valuesPack["VISUAL_ODOMETRY"] = valuesMap;
   if (this->connection.getStatus() == PAHOMQTTConnectionStatus::CONNECTED) {
