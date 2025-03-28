@@ -51,6 +51,24 @@ VO::VO(Config config){
         cfg.enable_device_from_file(config.rosbag_path, false);
     }
 
+    /* TELEMETRY CONFIGURATION */
+    if (config.telemetry) {
+        tlmData = new TelemetryData();
+        tlmData->create_rotoTranMatrix = false;
+        tlmData->start = false;
+
+        communication = new Communication(config.host, config.vehicleId, tlmData);
+        //Communication communication(config.host, config.vehicleId, tlmData);
+        while(communication->getConnection()->getStatus() != PAHOMQTTConnectionStatus::CONNECTED){
+            sleep(1);
+        }
+        std::cout << "Telemetry enabled" << std::endl;
+    } else {
+        tlmData = nullptr;
+        communication = nullptr;
+        std::cout << "Telemetry disabled" << std::endl;
+    }
+
     /* MASK CREATION FOR KEYPOINTS DETECTION */
     rs2::pipeline_profile profile = pipeline.start(cfg);
 
@@ -65,17 +83,6 @@ VO::VO(Config config){
     K = (cv::Mat_<double>(3,3) << intrinsics.fx,  0, intrinsics.ppx,
                                           0, intrinsics.fy, intrinsics.ppy,
                                           0,  0,  1);
-
-    // // Print intrinsics
-    // std::cout << "Width: " << intrinsics.width << ", Height: " << intrinsics.height << std::endl;
-    // std::cout << "Fx: " << intrinsics.fx << ", Fy: " << intrinsics.fy << std::endl;
-    // std::cout << "Cx: " << intrinsics.ppx << ", Cy: " << intrinsics.ppy << std::endl;
-    // std::cout << "Distortion Model: " << intrinsics.model << std::endl;
-    // std::cout << "Distortion Coefficients: ";
-    // for (double coeff : intrinsics.coeffs) {
-    //     std::cout << coeff << " ";
-    // }
-    // std::cout << std::endl;
 
     const int width = color_frame.as<rs2::video_frame>().get_width();
     const int height = color_frame.as<rs2::video_frame>().get_height();
@@ -100,10 +107,10 @@ VO::VO(Config config){
 
 }
 
-VO::VO(Config config, TelemetryData* tlmData, Communication* communication) : VO(config){
-    this->tlmData = tlmData;
-    this->communication = communication;
-}
+// VO::VO(Config config, TelemetryData* tlmData, Communication* communication) : VO(config){
+//     this->tlmData = tlmData;
+//     this->communication = communication;
+// }
 
 void VO::run() {
     rs2::align align(RS2_STREAM_COLOR);
@@ -157,7 +164,7 @@ void VO::run() {
         cv::Mat color_gray;
         cv::cvtColor(color, color_gray, cv::COLOR_BGR2GRAY);
 
-        /* PARALLELIZE FEATURE EXTRACTION */
+        /* PARALLEL FEATURE EXTRACTION */
 
         auto start = std::chrono::high_resolution_clock::now();
 

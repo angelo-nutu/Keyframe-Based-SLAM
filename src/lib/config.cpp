@@ -28,8 +28,10 @@ Config::Config(std::string& filename) {
     model_path = config["yolo"]["path"].as<std::string>();
 
     telemetry = config["telemetry"]["enabled"].as<bool>();
+    host = config["telemetry"]["host"].as<std::string>();
+    vehicleId = config["telemetry"]["vehicle_id"].as<std::string>();
 
-    std::cout << "Loaded Configuration:\n";
+    std::cout << "\nLoaded Configuration:\n";
     std::cout << "----------------------------------------\n";
     std::cout << std::left << std::setw(25) << "Odometry Extraction: ";
     std::transform(extraction.begin(), extraction.end(), std::ostream_iterator<char>(std::cout), ::toupper);
@@ -49,5 +51,9 @@ Config::Config(std::string& filename) {
               << "\"" << model_path << "\"\n";
     std::cout << std::left << std::setw(25) << "Telemetry Enabled:" 
               << (telemetry ? "YES" : "NO") << "\n";
-    std::cout << "----------------------------------------\n";
+    std::cout << std::left << std::setw(25) << "Telemetry Host:"
+              << "\"" << host << "\"\n";
+    std::cout << std::left << std::setw(25) << "Telemetry Vehicle ID:"
+              << "\"" << vehicleId << "\"\n";
+    std::cout << "----------------------------------------\n\n";
 }

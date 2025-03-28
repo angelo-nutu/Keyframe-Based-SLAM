@@ -24,6 +24,8 @@ public:
     std::string model_path;
 
     bool telemetry;
+    std::string host;
+    std::string vehicleId;
 private:
 
 };

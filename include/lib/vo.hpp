@@ -20,7 +20,7 @@
 class VO {
 public:
     VO(Config config);
-    VO(Config config, TelemetryData* tlmData, Communication* communication);
+    // VO(Config config, TelemetryData* tlmData, Communication* communication);
 
     void run();
     
