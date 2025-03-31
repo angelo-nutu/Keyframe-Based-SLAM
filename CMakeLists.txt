@@ -129,6 +129,7 @@ target_link_libraries(telemetry PUBLIC serializers communication mqtt-topics ${O
 
 add_library(lib
   src/lib/config.cpp
+  src/lib/plot.cpp
   src/lib/vo.cpp
 )
 

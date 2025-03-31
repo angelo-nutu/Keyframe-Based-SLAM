@@ -12,10 +12,11 @@
 #include <opencv2/xfeatures2d.hpp>
 
 #include <config.hpp>
-#include <raylib.h>
+//#include <raylib.h>
 
 #include "communication.hpp"
 #include "data.h"
+#include "plot.hpp"
 
 class VO {
 public:
@@ -50,6 +51,8 @@ private:
 
     TelemetryData* tlmData;
     Communication* communication;
+
+    Plot plt;
 };
 
 #endif

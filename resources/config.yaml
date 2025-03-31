@@ -13,7 +13,7 @@ yolo:
   path: "path/to/model.onnx"  # Path to the YOLO model (if enabled)
 
 telemetry:
-  enabled: true                # Enable telemetry communication
+  enabled: false                # Enable telemetry communication
   host : "localhost"          # Host for telemetry communication
   vehicle_id: "giorgia"          # Vehicle ID for telemetry
 

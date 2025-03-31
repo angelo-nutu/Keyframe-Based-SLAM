@@ -1,6 +1,5 @@
 #include <vo.hpp>
 #include <config.hpp>
-#include <raylib.h>
 
 int main(int argc, char** argv) {
     
