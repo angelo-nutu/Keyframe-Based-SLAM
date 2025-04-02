@@ -56,6 +56,7 @@ VO::VO(Config config){
         tlmData = new TelemetryData();
         tlmData->create_rotoTranMatrix = false;
         tlmData->start = false;
+        tlmData->rotoTranMat = cv::Mat();
 
         communication = new Communication(config.host, config.vehicleId, tlmData);
         while(communication->getConnection()->getStatus() != PAHOMQTTConnectionStatus::CONNECTED){
@@ -116,7 +117,7 @@ void VO::run() {
     cv::Mat color_gray_prev;
 
     bool start_vo = true;
-    bool keep_analyze_frames = true;
+    bool keep_analyze_frames;
     bool update_prev_variables = false;
 
     if(!config.telemetry){
@@ -124,11 +125,20 @@ void VO::run() {
         SetTargetFPS(this->plt.fps);
         keep_analyze_frames = this->plt.check_condition();
     }
+    else{
+        this->tlmData->start = true;
+
+        std::cout << "Waiting for a connection with telemetry" << std::endl;
+
+        while (tlmData->rotoTranMat.empty()) {
+            sleep(0.1);
+        }
+        keep_analyze_frames = true;
+    }
+    std::cout << "VO loop started" << std::endl;
+    std::cout <<  std::endl << "*************************************************" << std::endl << std::endl;
     
     while (keep_analyze_frames) {
-        if (config.telemetry){
-            this->tlmData->start = true;
-        }
         rs2::frameset frames = pipeline.wait_for_frames();
         frames = align.process(frames);
 
@@ -185,7 +195,7 @@ void VO::run() {
                     pose.at<double>(2, 3) = -T.at<double>(2,3);
 
                     cv::Mat res = tlmData->rotoTranMat * pose;
-                    communication->sendCoordinates(res.at<double>(0,3), res.at<double>(1,3));
+                    communication->sendCoordinates(res.at<double>(0,3), res.at<double>(1,3));                    
 
                 } else {                    /* DRAW THE NEW CAR POSITION WITH RAYLIB */
                     this->plt.add_point(trajectory.back());
