@@ -26,6 +26,8 @@ public:
     bool telemetry;
     std::string host;
     std::string vehicleId;
+
+    bool debug;
 private:
 
 };

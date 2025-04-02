@@ -147,17 +147,23 @@ void VO::run() {
         cv::setNumThreads(0);
         auto [keypoints, descriptors] = this->feature_extraction(color_gray, n);
         auto end = std::chrono::high_resolution_clock::now();
-        std::cout << "> Feature extraction took "
-                  << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-                  << " ms" << std::endl;
-        std::cout << "Number of keypoints: " << keypoints.size() << std::endl;
+
+        if(config.debug){
+            std::cout << "> Feature extraction took "
+                        << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+                        << " ms" << std::endl;
+            std::cout << "Number of keypoints: " << keypoints.size() << std::endl;
+        }
 
         if (!start_vo) {
             
             /* FEATURE MATCHING */
             cv::setNumThreads(-1);
             std::vector<cv::DMatch> valid_matches = this->feature_matching(descriptors_prev, descriptors, keypoints_prev, keypoints);
-            std::cout << "Number of valid matches: " << valid_matches.size() << std::endl;
+            
+            if (config.debug){
+                std::cout << "Number of valid matches: " << valid_matches.size() << std::endl;
+            }
 
             /* VISUALIZE KEYPOINTS and MATCHING */
             cv::drawKeypoints(color, keypoints, color, cv::Scalar::all(-1));
@@ -199,7 +205,9 @@ void VO::run() {
             update_prev_variables = false;
         }
 
-        std::cout <<  std::endl << "*************************************************" << std::endl << std::endl;
+        if (config.debug){
+            std::cout <<  std::endl << "*************************************************" << std::endl << std::endl;
+        }
 
         if (!config.telemetry){
             keep_analyze_frames = this->plt.check_condition();
@@ -223,9 +231,12 @@ std::pair<std::vector<cv::KeyPoint>, cv::Mat> VO::feature_extraction(cv::Mat col
             auto overhead_start = std::chrono::high_resolution_clock::now();
             extractor->detectAndCompute(image_portion, mask[i], keypoints, descriptors);
             auto overhead_end = std::chrono::high_resolution_clock::now();
-            std::cout << "Feature extraction overhead for portion " << i << ": "
-                        << std::chrono::duration_cast<std::chrono::milliseconds>(overhead_end - overhead_start).count()
-                        << " ms" << std::endl;
+
+            if (config.debug){
+                std::cout << "Feature extraction overhead for portion " << i << ": "
+                            << std::chrono::duration_cast<std::chrono::milliseconds>(overhead_end - overhead_start).count()
+                            << " ms" << std::endl;
+            }
 
             for (auto& keypoint : keypoints) {
                 keypoint.pt.y += start_row;
@@ -252,11 +263,14 @@ std::vector<cv::DMatch> VO::feature_matching(cv::Mat descriptors_prev, cv::Mat d
     auto overhead_start = std::chrono::high_resolution_clock::now();
     matcher->match(descriptors_prev, descriptors, matches);
     auto overhead_end = std::chrono::high_resolution_clock::now();
-    std::cout << "> Feature matching took "
-                << std::chrono::duration_cast<std::chrono::milliseconds>(overhead_end - overhead_start).count()
-                << " ms" << std::endl;
 
-    std::cout << "Number of matches found: " << matches.size() << std::endl;
+    if (config.debug){
+        std::cout << "> Feature matching took "
+                    << std::chrono::duration_cast<std::chrono::milliseconds>(overhead_end - overhead_start).count()
+                    << " ms" << std::endl;
+
+        std::cout << "Number of matches found: " << matches.size() << std::endl;
+    }
 
     std::sort(matches.begin(), matches.end(), [](const cv::DMatch &a, const cv::DMatch &b) {
         return a.distance < b.distance;
@@ -334,11 +348,14 @@ std::pair<bool, cv::Mat> VO::compute_pose(std::vector<cv::DMatch> valid_matches,
             auto overhead_start = std::chrono::high_resolution_clock::now();
             bool success = cv::solvePnPRansac(obj_points, img_points, K, distCoeffs, rvec, tvec, inliers);
             auto overhead_end = std::chrono::high_resolution_clock::now();
-            std::cout << "> PnP took "
-                        << std::chrono::duration_cast<std::chrono::milliseconds>(overhead_end - overhead_start).count()
-                        << " ms" << std::endl;
-            
-            std::cout << "Number of inliers found: " << inliers.size() << std::endl;
+
+            if (config.debug){
+                std::cout << "> PnP took "
+                            << std::chrono::duration_cast<std::chrono::milliseconds>(overhead_end - overhead_start).count()
+                            << " ms" << std::endl;
+                
+                std::cout << "Number of inliers found: " << inliers.size() << std::endl;
+            }
 
             if (success) {
                 cv::Mat R;

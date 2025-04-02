@@ -17,3 +17,4 @@ telemetry:
   host : "localhost"          # Host for telemetry communication
   vehicle_id: "giorgia"          # Vehicle ID for telemetry
 
+debug: true

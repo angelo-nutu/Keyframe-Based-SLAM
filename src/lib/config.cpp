@@ -12,6 +12,8 @@ Config::Config(){
     model_path = "";
 
     telemetry = false;
+
+    debug = true;
 }
 
 Config::Config(std::string& filename) {
@@ -30,6 +32,8 @@ Config::Config(std::string& filename) {
     telemetry = config["telemetry"]["enabled"].as<bool>();
     host = config["telemetry"]["host"].as<std::string>();
     vehicleId = config["telemetry"]["vehicle_id"].as<std::string>();
+
+    debug = config["debug"].as<bool>();
 
     std::cout << "\nLoaded Configuration:\n";
     std::cout << "----------------------------------------\n";
@@ -55,5 +59,7 @@ Config::Config(std::string& filename) {
               << "\"" << host << "\"\n";
     std::cout << std::left << std::setw(25) << "Telemetry Vehicle ID:"
               << "\"" << vehicleId << "\"\n";
+    std::cout << std::left << std::setw(25) << "Debug Enabled:" 
+              << (debug ? "YES" : "NO") << "\n";
     std::cout << "----------------------------------------\n\n";
 }
