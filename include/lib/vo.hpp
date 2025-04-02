@@ -24,15 +24,19 @@ public:
     // VO(Config config, TelemetryData* tlmData, Communication* communication);
 
     void run();
-    
+    std::pair<std::vector<cv::KeyPoint>, cv::Mat> feature_extraction(cv::Mat color_gray, int n);
+    std::vector<cv::DMatch> feature_matching(cv::Mat descriptors_prev, cv::Mat descriptors, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints);
     void output(cv::Mat color, cv::Mat depth, cv::Mat match);
-    
+    std::pair<bool, cv::Mat> compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, rs2::frame depth_frame, cv::Mat depth);
+
     ~VO();
     
     struct ExtractionOutput {
         std::vector<cv::KeyPoint> keypoints;
         cv::Mat descriptors;
     };
+
+    //std::vector<std::future<ExtractionOutput>> VO::feature_extraction(cv::Mat color_gray, std::vector<cv::Mat>& mask);
 
 private:
     rs2::pipeline pipeline;
