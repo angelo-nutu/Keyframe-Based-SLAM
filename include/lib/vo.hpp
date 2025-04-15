@@ -11,9 +11,7 @@
 #include <opencv2/features2d.hpp>
 #include <opencv2/xfeatures2d.hpp>
 
-#include <config.hpp>
-//#include <raylib.h>
-
+#include "config.hpp"
 #include "communication.hpp"
 #include "data.h"
 #include "plot.hpp"
@@ -23,11 +21,13 @@ public:
     VO(Config config);
     // VO(Config config, TelemetryData* tlmData, Communication* communication);
 
-    void run();
-    std::pair<std::vector<cv::KeyPoint>, cv::Mat> feature_extraction(cv::Mat color_gray, int n);
+    bool compute(cv::Mat color, cv::Mat depth);
+    std::pair<std::vector<cv::KeyPoint>, cv::Mat> feature_extraction(cv::Mat color_gray);
     std::vector<cv::DMatch> feature_matching(cv::Mat descriptors_prev, cv::Mat descriptors, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints);
+    void create_mask(int height, int width);
     void output(cv::Mat color, cv::Mat depth, cv::Mat match);
-    std::pair<bool, cv::Mat> compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, rs2::frame depth_frame, cv::Mat depth);
+    void set_K(cv::Mat K);
+    bool compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, cv::Mat depth, cv::Mat K);
 
     ~VO();
     
@@ -38,25 +38,26 @@ public:
 
     //std::vector<std::future<ExtractionOutput>> VO::feature_extraction(cv::Mat color_gray, std::vector<cv::Mat>& mask);
 
-private:
-    rs2::pipeline pipeline;
-    rs2::config cfg;
-
-    Config config;
-
-    cv::Ptr<cv::Feature2D> extractor;
-    cv::Ptr<cv::DescriptorMatcher> matcher;
-
-    std::vector<cv::Mat> mask;
-    cv::Mat K;
 
     std::vector<cv::Mat> poses;
     std::vector<cv::Point2f> trajectory;
 
-    TelemetryData* tlmData;
-    Communication* communication;
+    cv::Mat color_gray_prev;
+    std::vector<cv::KeyPoint> keypoints_prev;
+    cv::Mat descriptors_prev;
 
-    Plot plt;
+private:
+
+    Config config;
+
+    cv::Mat K;
+
+    std::vector<cv::Mat> mask;
+
+    cv::Ptr<cv::Feature2D> extractor;
+    cv::Ptr<cv::DescriptorMatcher> matcher;
+
+    bool start;
 };
 
 #endif

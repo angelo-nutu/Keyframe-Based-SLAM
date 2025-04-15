@@ -4,10 +4,7 @@
 
 VO::VO(Config config){
 
-    cv::setNumThreads(0);
-
     /* CONFIG FILE, BASIC ODOMETRY SETUP*/
-    int n = std::thread::hardware_concurrency();
 
     this->config = config;
 
@@ -39,196 +36,74 @@ VO::VO(Config config){
         exit(1);
     }
 
-    /* CAMERA CONFIGURATION PARAMETERS */
-    rs2::config cfg;
-
-    if (config.realtime) {
-        std::cout << "Using RealSense device for real-time capture" << std::endl;
-        cfg.enable_stream(RS2_STREAM_COLOR, 640, 480, RS2_FORMAT_BGR8, 30);
-        cfg.enable_stream(RS2_STREAM_DEPTH, 640, 480, RS2_FORMAT_Z16, 30);
-    } else {
-        std::cout << "Using RealSense device for playback" << std::endl;
-        cfg.enable_device_from_file(config.rosbag_path, false);
-    }
-
-    /* TELEMETRY CONFIGURATION */
-    if (config.telemetry) {
-        tlmData = new TelemetryData();
-        tlmData->create_rotoTranMatrix = false;
-        tlmData->start = false;
-        tlmData->rotoTranMat = cv::Mat();
-
-        communication = new Communication(config.host, config.vehicleId, tlmData);
-        while(communication->getConnection()->getStatus() != PAHOMQTTConnectionStatus::CONNECTED){
-            sleep(1);
-        }
-        std::cout << "Telemetry enabled" << std::endl;
-    } else {
-        tlmData = nullptr;
-        communication = nullptr;
-        std::cout << "Telemetry disabled" << std::endl;
-
-        this->plt = Plot();
-    }
-
-    /* MASK CREATION FOR KEYPOINTS DETECTION */
-    rs2::pipeline_profile profile = pipeline.start(cfg);
-
-    std::cout << "VO initialized and Realsense pipeline started" << std::endl;
-
-    rs2::frameset frames = pipeline.wait_for_frames();
-    rs2::frame color_frame = frames.get_color_frame();
-
-    auto depth_stream = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::video_stream_profile>();
-    rs2_intrinsics intrinsics = depth_stream.get_intrinsics();
-
-    K = (cv::Mat_<double>(3,3) << intrinsics.fx,  0, intrinsics.ppx,
-                                          0, intrinsics.fy, intrinsics.ppy,
-                                          0,  0,  1);
-
-    const int width = color_frame.as<rs2::video_frame>().get_width();
-    const int height = color_frame.as<rs2::video_frame>().get_height();
-    cv::Mat tri_mask = cv::Mat::zeros(cv::Size(width, height), CV_8UC1);
-
-    cv::Point pt1(width / 2, height * 2 / 3 - 10);
-    cv::Point pt2(0 + 20, height);
-    cv::Point pt3(width - 20, height);
-
-    std::vector<cv::Point> triangle_cnt = {pt1, pt2, pt3};
-    cv::drawContours(tri_mask, std::vector<std::vector<cv::Point>>{triangle_cnt}, 0, cv::Scalar(255), cv::FILLED);
-    cv::bitwise_not(tri_mask, tri_mask);
-
-    for (int i = 0; i < n; ++i) {
-        int start_row = MAX(0, i * (height / n) - 0.3 * (height / n));
-        int end_row = MIN(height, (i == n - 1) ? height + 0.3 * (height / n) : (i + 1) * (height / n) + 0.3 * (height / n));
-        cv::Mat mask_portion = tri_mask(cv::Range(start_row, end_row), cv::Range::all());
-        mask.push_back(mask_portion);
-    }
-
+    this->start = true;
     poses.push_back(cv::Mat::eye(4, 4, CV_64F));
 
+    std::cout << "VO initialized" << std::endl;
 }
 
-void VO::run() {
-    rs2::align align(RS2_STREAM_COLOR);
-
-    std::vector<cv::KeyPoint> keypoints_prev;
-    cv::Mat descriptors_prev;
-    cv::Mat color_gray_prev;
-
-    bool start_vo = true;
-    bool keep_analyze_frames;
-    bool update_prev_variables = false;
-
-    if(!config.telemetry){
-        InitWindow(this->plt.screenWidth, this->plt.screenHeight, "Real-Time Trajectory");
-        SetTargetFPS(this->plt.fps);
-        keep_analyze_frames = this->plt.check_condition();
-    }
-    else{
-        this->tlmData->start = true;
-
-        std::cout << "Waiting for a connection with telemetry" << std::endl;
-
-        while (tlmData->rotoTranMat.empty()) {
-            sleep(0.1);
-        }
-        keep_analyze_frames = true;
-    }
-    std::cout << "VO loop started" << std::endl;
-    std::cout <<  std::endl << "*************************************************" << std::endl << std::endl;
+bool VO::compute(cv::Mat color, cv::Mat depth) {
     
-    while (keep_analyze_frames) {
-        rs2::frameset frames = pipeline.wait_for_frames();
-        frames = align.process(frames);
+    cv::Mat color_gray;
+    cv::cvtColor(color, color_gray, cv::COLOR_BGR2GRAY);
 
-        rs2::frame color_frame = frames.get_color_frame();
-        rs2::frame depth_frame = frames.get_depth_frame();
+    /* PARALLEL FEATURE EXTRACTION */
+    auto start = std::chrono::high_resolution_clock::now();
+    int n = std::thread::hardware_concurrency();
+    cv::setNumThreads(0);
+    auto [keypoints, descriptors] = this->feature_extraction(color_gray);
+    auto end = std::chrono::high_resolution_clock::now();
 
-        cv::Mat color(cv::Size(color_frame.as<rs2::video_frame>().get_width(), color_frame.as<rs2::video_frame>().get_height()), CV_8UC3, (void*)color_frame.get_data(), cv::Mat::AUTO_STEP);
-        cv::Mat depth(cv::Size(depth_frame.as<rs2::video_frame>().get_width(), depth_frame.as<rs2::video_frame>().get_height()), CV_16UC1, (void*)depth_frame.get_data(), cv::Mat::AUTO_STEP);
-
-        cv::Mat color_gray;
-        cv::cvtColor(color, color_gray, cv::COLOR_BGR2GRAY);
-
-        /* PARALLEL FEATURE EXTRACTION */
-        auto start = std::chrono::high_resolution_clock::now();
-        int n = std::thread::hardware_concurrency();
-        cv::setNumThreads(0);
-        auto [keypoints, descriptors] = this->feature_extraction(color_gray, n);
-        auto end = std::chrono::high_resolution_clock::now();
-
-        if(config.debug){
-            std::cout << "> Feature extraction took "
-                        << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-                        << " ms" << std::endl;
-            std::cout << "Number of keypoints: " << keypoints.size() << std::endl;
-        }
-
-        if (!start_vo) {
-            
-            /* FEATURE MATCHING */
-            cv::setNumThreads(-1);
-            std::vector<cv::DMatch> valid_matches = this->feature_matching(descriptors_prev, descriptors, keypoints_prev, keypoints);
-            
-            if (config.debug){
-                std::cout << "Number of valid matches: " << valid_matches.size() << std::endl;
-            }
-
-            /* VISUALIZE KEYPOINTS and MATCHING */
-            cv::drawKeypoints(color, keypoints, color, cv::Scalar::all(-1));
-            cv::Mat img_matches;
-            cv::drawMatches(color_gray_prev, keypoints_prev, color_gray, keypoints, valid_matches, img_matches);
-            output(color, depth, img_matches);
-
-            /* COMPUTE POSE */
-            auto [success, T] = compute_pose(valid_matches, keypoints_prev, keypoints, depth_frame, depth);
-            update_prev_variables = success;
-
-            /* DRAW TRAJECTORY */
-            if (update_prev_variables){
-
-                if (config.telemetry){      /* SEND DATA TO TELEMETRY */
-                    cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
-                    pose.at<double>(0, 3) = T.at<double>(0,3);
-                    pose.at<double>(1, 3) = 0;
-                    pose.at<double>(2, 3) = -T.at<double>(2,3);
-
-                    cv::Mat res = tlmData->rotoTranMat * pose;
-                    communication->sendCoordinates(res.at<double>(0,3), res.at<double>(1,3));                    
-
-                } else {                    /* DRAW THE NEW CAR POSITION WITH RAYLIB */
-                    this->plt.add_point(trajectory.back());
-                    this->plt.draw_plot();
-                }
-            }
-
-        } else {
-            update_prev_variables = true;
-            start_vo = false;
-        }
-
-        if (update_prev_variables) {
-            color_gray_prev = color_gray.clone();
-            keypoints_prev = keypoints;
-            descriptors_prev = descriptors;
-            update_prev_variables = false;
-        }
-
-        if (config.debug){
-            std::cout <<  std::endl << "*************************************************" << std::endl << std::endl;
-        }
-
-        if (!config.telemetry){
-            keep_analyze_frames = this->plt.check_condition();
-        }
+    if(config.debug){
+        std::cout << "> Feature extraction took "
+                    << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+                    << " ms" << std::endl;
+        std::cout << "Number of keypoints: " << keypoints.size() << std::endl;
     }
+
+    bool update_prev_variables = true;
+    bool success = false;
+
+    if (!this->start) {
+
+        /* FEATURE MATCHING */
+        cv::setNumThreads(-1);
+        std::vector<cv::DMatch> valid_matches = this->feature_matching(this->descriptors_prev, descriptors, this->keypoints_prev, keypoints);
+        
+        if (config.debug){
+            std::cout << "Number of valid matches: " << valid_matches.size() << std::endl;
+        }
+
+        /* VISUALIZE KEYPOINTS and MATCHING */
+        cv::drawKeypoints(color, keypoints, color, cv::Scalar::all(-1));
+        cv::Mat img_matches;
+        cv::drawMatches(color_gray_prev, keypoints_prev, color_gray, keypoints, valid_matches, img_matches);
+        output(color, depth, img_matches);
+
+        /* COMPUTE POSE */
+        success = compute_pose(valid_matches, keypoints_prev, keypoints, depth, this->K);
+        update_prev_variables = success;
+
+    } else {
+        this->start = false;
+    }
+
+    if (update_prev_variables) {
+        this->color_gray_prev = color_gray.clone();
+        this->keypoints_prev = keypoints;
+        this->descriptors_prev = descriptors;
+    } else {
+        sleep(5);
+    }
+
+    return success;
 }
 
-std::pair<std::vector<cv::KeyPoint>, cv::Mat> VO::feature_extraction(cv::Mat color_gray, int n){
+std::pair<std::vector<cv::KeyPoint>, cv::Mat> VO::feature_extraction(cv::Mat color_gray){
     int height = color_gray.rows;
     
     std::vector<std::future<ExtractionOutput>> futures;
+    int n = std::thread::hardware_concurrency();
     for (int i = 0; i < mask.size(); ++i) {
         int start_row = MAX(0, i * (height / n) - 0.3 * (height / n));
         int end_row = MIN(height, (i == n - 1) ? height + 0.3 * (height / n) : (i + 1) * (height / n) + 0.3 * (height / n));
@@ -306,6 +181,29 @@ std::vector<cv::DMatch> VO::feature_matching(cv::Mat descriptors_prev, cv::Mat d
     return valid_matches;
 }
 
+void VO::create_mask(int height, int width){
+
+    /* MASK CREATION FOR KEYPOINTS DETECTION */
+    
+    cv::Mat tri_mask = cv::Mat::zeros(cv::Size(width, height), CV_8UC1);
+
+    cv::Point pt1(width / 2, height * 2 / 3 - 10);
+    cv::Point pt2(0 + 20, height);
+    cv::Point pt3(width - 20, height);
+
+    std::vector<cv::Point> triangle_cnt = {pt1, pt2, pt3};
+    cv::drawContours(tri_mask, std::vector<std::vector<cv::Point>>{triangle_cnt}, 0, cv::Scalar(255), cv::FILLED);
+    cv::bitwise_not(tri_mask, tri_mask);
+
+    int n = std::thread::hardware_concurrency();
+    for (int i = 0; i < n; ++i) {
+        int start_row = MAX(0, i * (height / n) - 0.3 * (height / n));
+        int end_row = MIN(height, (i == n - 1) ? height + 0.3 * (height / n) : (i + 1) * (height / n) + 0.3 * (height / n));
+        cv::Mat mask_portion = tri_mask(cv::Range(start_row, end_row), cv::Range::all());
+        this->mask.push_back(mask_portion);
+    }
+}
+
 void VO::output(cv::Mat color, cv::Mat depth, cv::Mat match) {
     cv::Mat color_rgb;
     cv::cvtColor(color, color_rgb, cv::COLOR_BGR2RGB);
@@ -325,7 +223,7 @@ void VO::output(cv::Mat color, cv::Mat depth, cv::Mat match) {
     cv::waitKey(1);
 }
 
-std::pair<bool, cv::Mat> VO::compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, rs2::frame depth_frame, cv::Mat depth){
+bool VO::compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, cv::Mat depth, cv::Mat K){
     if (valid_matches.size() > 0 && keypoints_prev.size() > 0 && keypoints.size() > 0) {
 
         std::vector<cv::Point3f> obj_points;
@@ -337,8 +235,8 @@ std::pair<bool, cv::Mat> VO::compute_pose(std::vector<cv::DMatch> valid_matches,
                 int u = static_cast<int>(keypoint.pt.x); 
                 int v = static_cast<int>(keypoint.pt.y);
 
-                if (u > 0 && v > 0 && u < depth_frame.as<rs2::video_frame>().get_height() && v < depth_frame.as<rs2::video_frame>().get_width()) {
-                    double depth_value = depth.at<uint16_t>(v, u) * 0.001;;
+                if (u > 0 && v > 0 && u < depth.rows && v < depth.cols) {
+                    double depth_value = depth.at<uint16_t>(v, u) * 0.001;
                     
                     if (depth_value > 0) {
                         double x = (u - K.at<double>(0,2)) * depth_value / K.at<double>(0,0);
@@ -381,17 +279,17 @@ std::pair<bool, cv::Mat> VO::compute_pose(std::vector<cv::DMatch> valid_matches,
                 cv::Point2f last = cv::Point2f(T.at<double>(0,3), -T.at<double>(2,3));
                 trajectory.push_back(last);
 
-                return {true, T};
+                return true;
             }
         }
     }
-    return {false, cv::Mat()};
+    return false;
+}
+
+void VO::set_K(cv::Mat K){
+    this->K = K;
 }
 
 VO::~VO() {
-
-    pipeline.stop();
     cv::destroyAllWindows();
-
-    std::cout << "Realsense pipeline stopped" << std::endl;
 }

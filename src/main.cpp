@@ -1,5 +1,11 @@
 #include <vo.hpp>
 #include <config.hpp>
+#include "cameraRealSense.hpp"
+
+#include <chrono>
+#include <thread>
+
+//TODO: spostare la crezione della maschera in camera !! (invece che in vo)
 
 int main(int argc, char** argv) {
     
@@ -12,10 +18,89 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    Config config(path);
+    cv::setNumThreads(0);
 
+    Config config(path);
     VO vo(config);
-    vo.run();
+    CameraRealSense camera(config);
+    vo.create_mask(camera.height, camera.width);
+    vo.set_K(camera.K);
+
+    bool keep_analyze_frames;
+    bool send_data;
+
+    /* TELEMETRY CONFIGURATION */
+    TelemetryData* tlmData;
+    Communication* communication;
+    Plot plt;
+    if (config.telemetry) {
+        tlmData = new TelemetryData();
+        tlmData->create_rotoTranMatrix = false;
+        tlmData->start = false;
+        tlmData->rotoTranMat = cv::Mat();
+
+        communication = new Communication(config.host, config.vehicleId, tlmData);
+        while(communication->getConnection()->getStatus() != PAHOMQTTConnectionStatus::CONNECTED){
+            sleep(1);
+        }
+        std::cout << "Telemetry enabled" << std::endl;
+
+        tlmData->start = true;
+
+        std::cout << "Waiting for a connection with telemetry" << std::endl;
+
+        while (tlmData->rotoTranMat.empty()) {
+            sleep(0.1);
+        }
+        keep_analyze_frames = true;
+    } else {
+        tlmData = nullptr;
+        communication = nullptr;
+        std::cout << "Telemetry disabled" << std::endl;
+
+        plt = Plot();
+        InitWindow(plt.screenWidth, plt.screenHeight, "Real-Time Trajectory");
+        SetTargetFPS(plt.fps);
+        keep_analyze_frames = plt.check_condition();
+    }
+
+    std::cout << "Main loop started" << std::endl;
+    std::cout <<  std::endl << "*************************************************" << std::endl << std::endl;
+    
+    while(keep_analyze_frames){
+        auto [color, depth, moving] = camera.get_frames();
+        std::cout << "Moving: " << moving << std::endl;
+        if (moving){
+            send_data = vo.compute(color, depth);
+
+            //TODO: spostare vo.output() qua fuori?
+
+            /* DRAW TRAJECTORY */
+            if (send_data){
+                if (config.telemetry){      /* SEND DATA TO TELEMETRY */
+                    cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
+                    pose.at<double>(0, 3) = vo.poses.back().at<double>(0,3);
+                    pose.at<double>(1, 3) = 0;
+                    pose.at<double>(2, 3) = -vo.poses.back().at<double>(2,3);
+
+                    cv::Mat res = tlmData->rotoTranMat * pose;
+                    communication->sendCoordinates(res.at<double>(0,3), res.at<double>(1,3));                    
+
+                } else {                    /* DRAW THE NEW CAR POSITION WITH RAYLIB */
+                    plt.add_point(vo.trajectory.back());
+                    plt.draw_plot();
+                }
+            }
+
+            if (config.debug){
+                std::cout <<  std::endl << "*************************************************" << std::endl << std::endl;
+            }
+        }
+    
+        if (!config.telemetry){
+            keep_analyze_frames = plt.check_condition();
+        }
+    }
 
     return 0;
 }
