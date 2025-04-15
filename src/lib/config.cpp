@@ -14,6 +14,7 @@ Config::Config(){
     telemetry = false;
 
     debug = true;
+    display = true;
 }
 
 Config::Config(std::string& filename) {
@@ -34,6 +35,7 @@ Config::Config(std::string& filename) {
     vehicleId = config["telemetry"]["vehicle_id"].as<std::string>();
 
     debug = config["debug"].as<bool>();
+    display = config["display"].as<bool>();
 
     std::cout << "\nLoaded Configuration:\n";
     std::cout << "----------------------------------------\n";
@@ -61,5 +63,7 @@ Config::Config(std::string& filename) {
               << "\"" << vehicleId << "\"\n";
     std::cout << std::left << std::setw(25) << "Debug Enabled:" 
               << (debug ? "YES" : "NO") << "\n";
+    std::cout << std::left << std::setw(25) << "Display Enabled:" 
+              << (display ? "YES" : "NO") << "\n";
     std::cout << "----------------------------------------\n\n";
 }

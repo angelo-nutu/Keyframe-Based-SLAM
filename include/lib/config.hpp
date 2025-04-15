@@ -28,6 +28,7 @@ public:
     std::string vehicleId;
 
     bool debug;
+    bool display;
 private:
 
 };

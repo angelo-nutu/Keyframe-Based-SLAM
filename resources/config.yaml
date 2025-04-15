@@ -1,20 +1,21 @@
 odometry:
-  extraction: "sift" # Feature Extraction Algorithm (orb, sift, surf)
-  matching: "flann"    # Feature Matching Algorithm (bf, flann)
-  pose: "pnp"       # Pose Estimation Algorithm (pnp, emat)
+  extraction: "sift"          # Feature Extraction Algorithm (orb, sift, surf)
+  matching: "bf"              # Feature Matching Algorithm (bf, flann)
+  pose: "pnp"                 # Pose Estimation Algorithm (pnp, emat)
 
 camera:
-  realtime: false          # Enable real-time acquisition from the camera
+  realtime: false             # Enable real-time acquisition from the camera
   path: "../2024_12_15/16_41_35_DV_1_baseline_1.bag"  # Path to the rosbag (if real-time is off)
 # TODO: add camera configuration parameters
 
 yolo:
-  enabled: false               # Whether to run YOLO inference
+  enabled: false              # Whether to run YOLO inference
   path: "path/to/model.onnx"  # Path to the YOLO model (if enabled)
 
 telemetry:
-  enabled: false                # Enable telemetry communication
+  enabled: false              # Enable telemetry communication
   host : "localhost"          # Host for telemetry communication
-  vehicle_id: "giorgia"          # Vehicle ID for telemetry
+  vehicle_id: "giorgia"       # Vehicle ID for telemetry
 
-debug: true
+debug: true                   # Enable debug mode, ence print the debug information
+display: true                 # Display the RGB and depth from camera, as well as features matching done

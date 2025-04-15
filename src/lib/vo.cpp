@@ -78,7 +78,10 @@ bool VO::compute(cv::Mat color, cv::Mat depth) {
         cv::drawKeypoints(color, keypoints, color, cv::Scalar::all(-1));
         cv::Mat img_matches;
         cv::drawMatches(color_gray_prev, keypoints_prev, color_gray, keypoints, valid_matches, img_matches);
-        output(color, depth, img_matches);
+
+        if (config.display){
+            output(color, depth, img_matches);
+        }
 
         /* COMPUTE POSE */
         success = compute_pose(valid_matches, keypoints_prev, keypoints, depth, this->K);
