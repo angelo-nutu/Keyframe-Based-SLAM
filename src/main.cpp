@@ -1,11 +1,11 @@
 #include <vo.hpp>
 #include <config.hpp>
 #include "cameraRealSense.hpp"
+#include "mutex.hpp"
 
 #include <chrono>
-#include <thread>
 
-//TODO: spostare la crezione della maschera in camera !! (invece che in vo)
+std::mutex shared_mutex;
 
 int main(int argc, char** argv) {
     
@@ -69,11 +69,15 @@ int main(int argc, char** argv) {
     
     while(keep_analyze_frames){
         auto [color, depth, moving] = camera.get_frames();
-        std::cout << "Moving: " << moving << std::endl;
         if (moving){
+            shared_mutex.lock();
+            if (config.telemetry && tlmData->reset_VO){
+                vo.reset();
+                tlmData->reset_VO = false;
+                std::cout << "VO reset !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
+            }
+            shared_mutex.unlock();
             send_data = vo.compute(color, depth);
-
-            //TODO: spostare vo.output() qua fuori?
 
             /* DRAW TRAJECTORY */
             if (send_data){
@@ -83,7 +87,9 @@ int main(int argc, char** argv) {
                     pose.at<double>(1, 3) = 0;
                     pose.at<double>(2, 3) = -vo.poses.back().at<double>(2,3);
 
+                    shared_mutex.lock();
                     cv::Mat res = tlmData->rotoTranMat * pose;
+                    shared_mutex.unlock();
                     communication->sendCoordinates(res.at<double>(0,3), res.at<double>(1,3));                    
 
                 } else {                    /* DRAW THE NEW CAR POSITION WITH RAYLIB */

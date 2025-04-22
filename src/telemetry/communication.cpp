@@ -8,6 +8,8 @@
 #include "mqtt_topics.h"
 #include <sys/time.h>
 
+
+
 Communication::Communication(const std::string &host,
                              const std::string &vehicleId, TelemetryData *data)
     : vehicleId(vehicleId) {
@@ -58,6 +60,8 @@ void Communication::onMessageCallback(PAHOMQTTConnection *connection,
       tlmData->data->vehicleState.deserializeFromJsonString(message.getPayload());
       
       if(tlmData->data->create_rotoTranMatrix){
+        shared_mutex.lock();
+        tlmData->data->create_rotoTranMatrix = false;
         double heading = tlmData->data->vehicleState.heading;
         double yaw = (180 - cv::abs(heading)) * ((heading > 0 ? +1 : -1));
         tlmData->data->rotoTranMat = (cv::Mat_<double>(4, 4) << 
@@ -66,15 +70,12 @@ void Communication::onMessageCallback(PAHOMQTTConnection *connection,
            std::sin(yaw),   -std::cos(yaw),  0,                             0,
                        0,                0,  0,                             1
           );
-          
-        tlmData->data->create_rotoTranMatrix = false;
-
+        tlmData->data->reset_VO = true;
+        
         // auto topicVehicleState = MQTTTopics::GetTopicExtraTlmDataVehicleState(tlmData->vehicleId, "onboard");
         // connection->unsubscribe(topicVehicleState.topic);
-        
-        std::cout << std::endl << "#################################################" << std::endl 
-          << "GPS ORIGIN UPDATED, NEW ROTO-TRANSLATION MATRIX:" << std::endl << tlmData->data->rotoTranMat << std::endl 
-          << "#################################################" << std::endl << std::endl; 
+
+        shared_mutex.unlock();
         
       }
     }
@@ -90,6 +91,7 @@ void Communication::onMessageCallback(PAHOMQTTConnection *connection,
             new_origin.latitude != tlmData->data->current_origin.latitude || 
             new_origin.longitude != tlmData->data->current_origin.longitude) {
             
+              shared_mutex.lock();
               tlmData->data->current_origin.altitude = new_origin.altitude;
               tlmData->data->current_origin.latitude = new_origin.latitude;
               tlmData->data->current_origin.longitude = new_origin.longitude;
@@ -102,6 +104,7 @@ void Communication::onMessageCallback(PAHOMQTTConnection *connection,
                   << "latitude: " << tlmData->data->current_origin.latitude << std::endl 
                   << "longitude: " << tlmData->data->current_origin.longitude << std::endl
                   << "#################################################" << std::endl << std::endl; 
+              shared_mutex.unlock();
         }
         
 

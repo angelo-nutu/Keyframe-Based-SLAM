@@ -134,6 +134,12 @@ add_library(lib
   src/lib/vo.cpp
 )
 
+target_include_directories(telemetry
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/include
+  ${CMAKE_SOURCE_DIR}/include/lib
+)
+
 target_include_directories(lib
   PUBLIC
   ${CMAKE_SOURCE_DIR}/include

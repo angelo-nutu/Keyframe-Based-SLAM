@@ -3,6 +3,7 @@
 
 #include "data.h"
 #include "paho_mqtt_connection.hpp"
+#include "mutex.hpp"
 
 class Communication {
 public:

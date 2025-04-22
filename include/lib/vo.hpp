@@ -27,6 +27,7 @@ public:
     void create_mask(int height, int width);
     void output(cv::Mat color, cv::Mat depth, cv::Mat match);
     void set_K(cv::Mat K);
+    void reset();
     bool compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, cv::Mat depth, cv::Mat K);
 
     ~VO();
@@ -37,7 +38,6 @@ public:
     };
 
     //std::vector<std::future<ExtractionOutput>> VO::feature_extraction(cv::Mat color_gray, std::vector<cv::Mat>& mask);
-
 
     std::vector<cv::Mat> poses;
     std::vector<cv::Point2f> trajectory;

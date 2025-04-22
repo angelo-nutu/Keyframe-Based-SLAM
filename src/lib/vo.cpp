@@ -95,8 +95,6 @@ bool VO::compute(cv::Mat color, cv::Mat depth) {
         this->color_gray_prev = color_gray.clone();
         this->keypoints_prev = keypoints;
         this->descriptors_prev = descriptors;
-    } else {
-        sleep(5);
     }
 
     return success;
@@ -224,6 +222,16 @@ void VO::output(cv::Mat color, cv::Mat depth, cv::Mat match) {
     cv::imshow("Output", output);
 
     cv::waitKey(1);
+}
+
+void VO::reset(){
+    this->start = true;
+    this->poses.clear();
+    this->poses.push_back(cv::Mat::eye(4, 4, CV_64F));
+    this->trajectory.clear();
+    this->color_gray_prev.release();
+    this->keypoints_prev.clear();
+    this->descriptors_prev.release();
 }
 
 bool VO::compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, cv::Mat depth, cv::Mat K){

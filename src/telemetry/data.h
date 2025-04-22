@@ -20,6 +20,7 @@ struct TelemetryData {
   cv::Mat rotoTranMat;
   bool start;
   bool create_rotoTranMatrix;
+  bool reset_VO;
 };
 
 #endif // DATA_H
