@@ -23,7 +23,6 @@ int main(int argc, char** argv) {
     Config config(path);
     VO vo(config);
     CameraRealSense camera(config);
-    vo.create_mask(camera.height, camera.width);
     vo.set_K(camera.K);
 
     bool keep_analyze_frames;
@@ -74,10 +73,13 @@ int main(int argc, char** argv) {
             if (config.telemetry && tlmData->reset_VO){
                 vo.reset();
                 tlmData->reset_VO = false;
-                std::cout << "VO reset !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
+                std::cout << std::endl << "#################################################" << std::endl 
+                          << "VO reset !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl
+                          << "#################################################" << std::endl << std::endl;
             }
             shared_mutex.unlock();
-            send_data = vo.compute(color, depth);
+            cv::Mat mask = camera.create_mask(color, depth);
+            send_data = vo.compute(color, depth, mask);
 
             /* DRAW TRAJECTORY */
             if (send_data){

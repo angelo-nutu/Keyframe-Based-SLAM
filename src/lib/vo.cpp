@@ -42,16 +42,25 @@ VO::VO(Config config){
     std::cout << "VO initialized" << std::endl;
 }
 
-bool VO::compute(cv::Mat color, cv::Mat depth) {
+bool VO::compute(cv::Mat color, cv::Mat depth, cv::Mat tri_mask) {
     
     cv::Mat color_gray;
     cv::cvtColor(color, color_gray, cv::COLOR_BGR2GRAY);
 
     /* PARALLEL FEATURE EXTRACTION */
     auto start = std::chrono::high_resolution_clock::now();
+    std::vector<cv::Mat> mask;
+    int height = color_gray.rows;
+    int width = color_gray.cols;
     int n = std::thread::hardware_concurrency();
     cv::setNumThreads(0);
-    auto [keypoints, descriptors] = this->feature_extraction(color_gray);
+    for (int i = 0; i < n; ++i) {
+        int start_row = MAX(0, i * (height / n) - 0.3 * (height / n));
+        int end_row = MIN(height, (i == n - 1) ? height + 0.3 * (height / n) : (i + 1) * (height / n) + 0.3 * (height / n));
+        cv::Mat mask_portion = tri_mask(cv::Range(start_row, end_row), cv::Range::all());
+        mask.push_back(mask_portion);
+    }
+    auto [keypoints, descriptors] = this->feature_extraction(color_gray, mask);
     auto end = std::chrono::high_resolution_clock::now();
 
     if(config.debug){
@@ -100,7 +109,8 @@ bool VO::compute(cv::Mat color, cv::Mat depth) {
     return success;
 }
 
-std::pair<std::vector<cv::KeyPoint>, cv::Mat> VO::feature_extraction(cv::Mat color_gray){
+std::pair<std::vector<cv::KeyPoint>, cv::Mat> VO::feature_extraction(cv::Mat color_gray, std::vector<cv::Mat> mask){
+
     int height = color_gray.rows;
     
     std::vector<std::future<ExtractionOutput>> futures;
@@ -110,7 +120,7 @@ std::pair<std::vector<cv::KeyPoint>, cv::Mat> VO::feature_extraction(cv::Mat col
         int end_row = MIN(height, (i == n - 1) ? height + 0.3 * (height / n) : (i + 1) * (height / n) + 0.3 * (height / n));
         cv::Mat image_portion = color_gray(cv::Range(start_row, end_row), cv::Range::all()).clone();
 
-        futures.push_back(std::async(std::launch::async, [this, image_portion, i, start_row] {
+        futures.push_back(std::async(std::launch::async, [this, image_portion, i, start_row, mask] {
             std::vector<cv::KeyPoint> keypoints;
             cv::Mat descriptors;
             
@@ -180,29 +190,6 @@ std::vector<cv::DMatch> VO::feature_matching(cv::Mat descriptors_prev, cv::Mat d
     });
 
     return valid_matches;
-}
-
-void VO::create_mask(int height, int width){
-
-    /* MASK CREATION FOR KEYPOINTS DETECTION */
-    
-    cv::Mat tri_mask = cv::Mat::zeros(cv::Size(width, height), CV_8UC1);
-
-    cv::Point pt1(width / 2, height * 2 / 3 - 10);
-    cv::Point pt2(0 + 20, height);
-    cv::Point pt3(width - 20, height);
-
-    std::vector<cv::Point> triangle_cnt = {pt1, pt2, pt3};
-    cv::drawContours(tri_mask, std::vector<std::vector<cv::Point>>{triangle_cnt}, 0, cv::Scalar(255), cv::FILLED);
-    cv::bitwise_not(tri_mask, tri_mask);
-
-    int n = std::thread::hardware_concurrency();
-    for (int i = 0; i < n; ++i) {
-        int start_row = MAX(0, i * (height / n) - 0.3 * (height / n));
-        int end_row = MIN(height, (i == n - 1) ? height + 0.3 * (height / n) : (i + 1) * (height / n) + 0.3 * (height / n));
-        cv::Mat mask_portion = tri_mask(cv::Range(start_row, end_row), cv::Range::all());
-        this->mask.push_back(mask_portion);
-    }
 }
 
 void VO::output(cv::Mat color, cv::Mat depth, cv::Mat match) {
