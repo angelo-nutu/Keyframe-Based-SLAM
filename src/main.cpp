@@ -27,6 +27,7 @@ int main(int argc, char** argv) {
     VO vo(config);
     CameraRealSense camera(config);
     vo.set_K(camera.K);
+    vo.set_distortion_coeffs(camera.dist_coeffs);
 
     bool keep_analyze_frames;
     bool send_data;
@@ -109,7 +110,9 @@ int main(int argc, char** argv) {
             }
         }
 
-        output(color, depth, vo.display_matches);
+        if(config.display) {
+          output(color, depth, vo.display_matches);
+        }
 
         if (!config.telemetry){
             plt.draw_plot();

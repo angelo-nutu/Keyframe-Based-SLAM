@@ -19,6 +19,7 @@ class CameraRealSense : public CameraManagement{
         int width;
         int height;
         cv::Mat K;
+        std::vector<float> dist_coeffs;
 
     private:
 

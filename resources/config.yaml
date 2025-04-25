@@ -16,8 +16,8 @@ yolo:
 
 telemetry:
   enabled: false               # Enable telemetry communication
-  host : "localhost"          # Host for telemetry communication ["localhost" / "api.eagletrt.it" / "control.local"]
-  vehicle_id: "giorgia"       # Vehicle ID for telemetry
+  host : "control.local"          # Host for telemetry communication ["localhost" / "api.eagletrt.it" / "control.local"]
+  vehicle_id: "hydra"       # Vehicle ID for telemetry
 
-debug: true                   # Enable debug mode, ence print the debug information
-display: true                 # Display the RGB and depth from camera, as well as features matching done
+debug: false                   # Enable debug mode, ence print the debug information
+display: false                 # Display the RGB and depth from camera, as well as features matching done

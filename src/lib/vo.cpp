@@ -1,6 +1,7 @@
 #include "vo.hpp"
 #include <future>
 #include <atomic>
+#include <librealsense2/h/rs_types.h>
 
 VO::VO(Config config){
 
@@ -193,7 +194,7 @@ void VO::reset(){
     this->descriptors_prev.release();
 }
 
-bool VO::compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, cv::Mat depth, cv::Mat K){
+bool VO::compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, cv::Mat depth, cv::Mat K) {
     if (valid_matches.size() > 0 && keypoints_prev.size() > 0 && keypoints.size() > 0) {
 
         std::vector<cv::Point3f> obj_points;
@@ -220,6 +221,11 @@ bool VO::compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::Key
 
         if (obj_points.size() >= 10) {
             cv::Mat distCoeffs = cv::Mat::zeros(4, 1, CV_64F);  // Assuming no distortion
+            /*distCoeffs.at<double>(0) = distortion_coeffs[0];*/
+            /*distCoeffs.at<double>(1) = distortion_coeffs[1];*/
+            /*distCoeffs.at<double>(2) = distortion_coeffs[2];*/
+            /*distCoeffs.at<double>(3) = distortion_coeffs[3];*/
+            /*distCoeffs.at<double>(4) = distortion_coeffs[4];*/
             // TODO: decide whether to keep the previous line here, or to take it out of the while-loop
             cv::Mat rvec, tvec;
             std::vector<int> inliers;
@@ -258,6 +264,10 @@ bool VO::compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::Key
 
 void VO::set_K(cv::Mat K){
     this->K = K;
+}
+
+void VO::set_distortion_coeffs(std::vector<float> distortion_coeffs){
+    this->distortion_coeffs = distortion_coeffs;
 }
 
 VO::~VO() {

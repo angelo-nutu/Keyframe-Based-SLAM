@@ -1,4 +1,6 @@
 #include "cameraRealSense.hpp"
+#include <iostream>
+#include <librealsense2/h/rs_types.h>
 
 CameraRealSense::CameraRealSense(Config config) : align(RS2_STREAM_COLOR){
 
@@ -19,12 +21,18 @@ CameraRealSense::CameraRealSense(Config config) : align(RS2_STREAM_COLOR){
     this->width = color_profile.width();
     this->height = color_profile.height();
 
+    rs2_intrinsics intrinsics_c = color_profile.get_intrinsics();
+
+    this->dist_coeffs = {intrinsics_c.coeffs[0], intrinsics_c.coeffs[1], intrinsics_c.coeffs[2], intrinsics_c.coeffs[3], intrinsics_c.coeffs[4]};
+
     auto depth_stream = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::video_stream_profile>();
     rs2_intrinsics intrinsics = depth_stream.get_intrinsics();
     K = (cv::Mat_<double>(3,3) << intrinsics.fx,             0, intrinsics.ppx,
                                               0, intrinsics.fy, intrinsics.ppy,
                                               0,             0,              1
         );
+
+    std::cout << "Camera intrinsics_c: " << intrinsics_c.coeffs[0] << "- " << intrinsics_c.coeffs[1] << "- " << intrinsics_c.coeffs[2] << "- " << intrinsics_c.coeffs[3] << "- " << intrinsics_c.coeffs[4] << std::endl;
 
     this->accel_threshold = config.accel_threshold;
     this->gyro_threshold = config.gyro_threshold;

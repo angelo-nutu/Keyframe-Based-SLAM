@@ -26,6 +26,7 @@ public:
     std::pair<std::vector<cv::KeyPoint>, cv::Mat> feature_extraction(cv::Mat color_gray, std::vector<cv::Mat> mask);
     std::vector<cv::DMatch> feature_matching(cv::Mat descriptors_prev, cv::Mat descriptors, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints);
     void set_K(cv::Mat K);
+    void set_distortion_coeffs(std::vector<float> distortion_coeffs);
     void reset();
     bool compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, cv::Mat depth, cv::Mat K);
 
@@ -52,6 +53,7 @@ private:
     Config config;
 
     cv::Mat K;
+    std::vector<float> distortion_coeffs;
 
     cv::Ptr<cv::Feature2D> extractor;
     cv::Ptr<cv::DescriptorMatcher> matcher;
