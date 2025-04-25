@@ -56,6 +56,18 @@ void Plot::draw_plot(){
     BeginDrawing();
     ClearBackground(BLACK);
 
+    if(trajectory.size() == 0){
+        const char* message = "Still waiting for points ...";
+        int fontSize = 20;
+        int textWidth = MeasureText(message, fontSize);
+        int x = (screenWidth - textWidth) / 2;
+        int y = screenHeight / 2 - fontSize / 2;
+
+        DrawText(message, x, y, fontSize, YELLOW);
+        EndDrawing();
+        return;
+    }
+
     // draw x grid
     float startX = std::ceil(Pixel2World(margin,0) / gridSpacingX) * gridSpacingX;
     float endX = Pixel2World(screenWidth - margin,0);

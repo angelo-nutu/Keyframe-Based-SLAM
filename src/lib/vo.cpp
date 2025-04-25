@@ -70,7 +70,6 @@ bool VO::compute(cv::Mat color, cv::Mat depth, cv::Mat tri_mask) {
         std::cout << "Number of keypoints: " << keypoints.size() << std::endl;
     }
 
-    bool update_prev_variables = true;
     bool success = false;
 
     if (!this->start) {
@@ -85,26 +84,18 @@ bool VO::compute(cv::Mat color, cv::Mat depth, cv::Mat tri_mask) {
 
         /* VISUALIZE KEYPOINTS and MATCHING */
         cv::drawKeypoints(color, keypoints, color, cv::Scalar::all(-1));
-        cv::Mat img_matches;
-        cv::drawMatches(color_gray_prev, keypoints_prev, color_gray, keypoints, valid_matches, img_matches);
-
-        if (config.display){
-            output(color, depth, img_matches);
-        }
+        cv::drawMatches(color_gray_prev, keypoints_prev, color_gray, keypoints, valid_matches, this->display_matches);
 
         /* COMPUTE POSE */
         success = compute_pose(valid_matches, keypoints_prev, keypoints, depth, this->K);
-        update_prev_variables = success;
 
     } else {
         this->start = false;
     }
 
-    if (update_prev_variables) {
-        this->color_gray_prev = color_gray.clone();
-        this->keypoints_prev = keypoints;
-        this->descriptors_prev = descriptors;
-    }
+    this->color_gray_prev = color_gray.clone();
+    this->keypoints_prev = keypoints;
+    this->descriptors_prev = descriptors;
 
     return success;
 }
@@ -190,25 +181,6 @@ std::vector<cv::DMatch> VO::feature_matching(cv::Mat descriptors_prev, cv::Mat d
     });
 
     return valid_matches;
-}
-
-void VO::output(cv::Mat color, cv::Mat depth, cv::Mat match) {
-    cv::Mat color_rgb;
-    cv::cvtColor(color, color_rgb, cv::COLOR_BGR2RGB);
-
-    cv::Mat depth_u8;
-    cv::convertScaleAbs(depth, depth_u8, 0.02);
-    cv::applyColorMap(depth_u8, depth_u8, cv::COLORMAP_JET);
-
-    cv::Mat top_row;
-    cv::hconcat(color_rgb, depth_u8, top_row);
-
-    cv::Mat output;
-    cv::vconcat(top_row, match, output);
-
-    cv::imshow("Output", output);
-
-    cv::waitKey(1);
 }
 
 void VO::reset(){

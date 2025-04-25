@@ -26,15 +26,13 @@ CameraRealSense::CameraRealSense(Config config) : align(RS2_STREAM_COLOR){
                                               0,             0,              1
         );
 
-    this->accel_threshold = 0.2f;
-    this->gyro_threshold = 0.6f;
-
-    std::cout << "ok" << std::endl;
+    this->accel_threshold = config.accel_threshold;
+    this->gyro_threshold = config.gyro_threshold;
 }
 
 void CameraRealSense::realtime() {
     std::cout << "Using RealSense device for real-time capture" << std::endl;
-    this->cfg.enable_stream(RS2_STREAM_COLOR, 640, 480, RS2_FORMAT_BGR8, 30);
+    this->cfg.enable_stream(RS2_STREAM_COLOR, 640, 480, RS2_FORMAT_RGB8, 30);
     this->cfg.enable_stream(RS2_STREAM_DEPTH, 640, 480, RS2_FORMAT_Z16, 30);
     this->cfg.enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F);
     this->cfg.enable_stream(RS2_STREAM_GYRO,  RS2_FORMAT_MOTION_XYZ32F);

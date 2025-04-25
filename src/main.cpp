@@ -7,6 +7,8 @@
 
 std::mutex shared_mutex;
 
+void output(cv::Mat color, cv::Mat depth, cv::Mat match);
+
 int main(int argc, char** argv) {
     
     std::string path;
@@ -96,19 +98,46 @@ int main(int argc, char** argv) {
 
                 } else {                    /* DRAW THE NEW CAR POSITION WITH RAYLIB */
                     plt.add_point(vo.trajectory.back());
-                    plt.draw_plot();
                 }
+            } else {
+                std::cout << std::endl << "Frame discarded. No enough good matches." << std::endl; 
             }
 
             if (config.debug){
                 std::cout <<  std::endl << "*************************************************" << std::endl << std::endl;
             }
         }
-    
+
+        output(color, depth, vo.display_matches);
+
         if (!config.telemetry){
+            plt.draw_plot();
             keep_analyze_frames = plt.check_condition();
         }
     }
 
     return 0;
+}
+
+void output(cv::Mat color, cv::Mat depth, cv::Mat match) {
+    cv::Mat color_bgr;
+    cv::cvtColor(color, color_bgr, cv::COLOR_RGB2BGR);
+
+    cv::Mat depth_u8;
+    cv::convertScaleAbs(depth, depth_u8, 0.02);
+    cv::applyColorMap(depth_u8, depth_u8, cv::COLORMAP_JET);
+
+    cv::Mat top_row;
+    cv::hconcat(color_bgr, depth_u8, top_row);
+
+    if(match.empty()){
+        match = cv::Mat::zeros(color_bgr.rows, 2 * color_bgr.cols, CV_8UC3);
+    }
+
+    cv::Mat output;
+    cv::vconcat(top_row, match, output);
+
+    cv::imshow("Output", output);
+
+    cv::waitKey(1);
 }

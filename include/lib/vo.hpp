@@ -25,7 +25,6 @@ public:
     bool compute(cv::Mat color, cv::Mat depth, cv::Mat mask);
     std::pair<std::vector<cv::KeyPoint>, cv::Mat> feature_extraction(cv::Mat color_gray, std::vector<cv::Mat> mask);
     std::vector<cv::DMatch> feature_matching(cv::Mat descriptors_prev, cv::Mat descriptors, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints);
-    void output(cv::Mat color, cv::Mat depth, cv::Mat match);
     void set_K(cv::Mat K);
     void reset();
     bool compute_pose(std::vector<cv::DMatch> valid_matches, std::vector<cv::KeyPoint> keypoints_prev, std::vector<cv::KeyPoint> keypoints, cv::Mat depth, cv::Mat K);
@@ -45,6 +44,8 @@ public:
     cv::Mat color_gray_prev;
     std::vector<cv::KeyPoint> keypoints_prev;
     cv::Mat descriptors_prev;
+
+    cv::Mat display_matches;
 
 private:
 

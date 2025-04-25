@@ -4,7 +4,9 @@ odometry:
   pose: "pnp"                 # Pose Estimation Algorithm (pnp, emat)
 
 camera:
-  realtime: false             # Enable real-time acquisition from the camera
+  accel-threshold: 0.3       # Acceleration threshold for detection of camera movement 
+  gyro-threshold: 0.6        # Gyroscope threshold for detection of camera movement
+  realtime: true             # Enable real-time acquisition from the camera
   path: "../2024_12_15/16_41_35_DV_1_baseline_1.bag"  # Path to the rosbag (if real-time is off)
 # TODO: add camera configuration parameters
 
@@ -13,8 +15,8 @@ yolo:
   path: "path/to/model.onnx"  # Path to the YOLO model (if enabled)
 
 telemetry:
-  enabled: false              # Enable telemetry communication
-  host : "localhost"          # Host for telemetry communication
+  enabled: false               # Enable telemetry communication
+  host : "localhost"          # Host for telemetry communication ["localhost" / "api.eagletrt.it" / "control.local"]
   vehicle_id: "giorgia"       # Vehicle ID for telemetry
 
 debug: true                   # Enable debug mode, ence print the debug information

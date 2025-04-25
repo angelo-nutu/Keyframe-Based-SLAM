@@ -5,6 +5,8 @@ Config::Config(){
     matching = "bf";
     pose = "pnp";
 
+    accel_threshold = 0.3f;
+    gyro_threshold = 0.6f;
     realtime = true;
     rosbag_path = "";
 
@@ -24,6 +26,8 @@ Config::Config(std::string& filename) {
     matching = config["odometry"]["matching"].as<std::string>();
     pose = config["odometry"]["pose"].as<std::string>();
 
+    accel_threshold = config["camera"]["accel-threshold"].as<float>();
+    gyro_threshold = config["camera"]["gyro-threshold"].as<float>();
     realtime = config["camera"]["realtime"].as<bool>();
     rosbag_path = config["camera"]["path"].as<std::string>();
 

@@ -17,6 +17,8 @@ public:
     std::string matching;
     std::string pose;
 
+    float accel_threshold;
+    float gyro_threshold;
     bool realtime;
     std::string rosbag_path;
 
