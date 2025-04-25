@@ -2,6 +2,7 @@
 #include <config.hpp>
 #include "cameraRealSense.hpp"
 #include "mutex.hpp"
+#include <unistd.h>
 
 #include <chrono>
 
