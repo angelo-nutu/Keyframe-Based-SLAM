@@ -1,16 +1,14 @@
 #include "cameraRealSense.hpp"
-#include <iostream>
-#include <librealsense2/h/rs_types.h>
 
 CameraRealSense::CameraRealSense(Config config) : align(RS2_STREAM_COLOR){
 
     this->config = config;
 
-    if (config.realtime) {
-        this->realtime();
+    if (config.replay) {
+        this->playback();
     }
     else {
-        this->playback();
+        this->realtime();
     }
 
     auto profile = pipeline.start(cfg);
@@ -21,10 +19,6 @@ CameraRealSense::CameraRealSense(Config config) : align(RS2_STREAM_COLOR){
     this->width = color_profile.width();
     this->height = color_profile.height();
 
-    rs2_intrinsics intrinsics_c = color_profile.get_intrinsics();
-
-    this->dist_coeffs = {intrinsics_c.coeffs[0], intrinsics_c.coeffs[1], intrinsics_c.coeffs[2], intrinsics_c.coeffs[3], intrinsics_c.coeffs[4]};
-
     auto depth_stream = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::video_stream_profile>();
     rs2_intrinsics intrinsics = depth_stream.get_intrinsics();
     K = (cv::Mat_<double>(3,3) << intrinsics.fx,             0, intrinsics.ppx,
@@ -32,15 +26,13 @@ CameraRealSense::CameraRealSense(Config config) : align(RS2_STREAM_COLOR){
                                               0,             0,              1
         );
 
-    std::cout << "Camera intrinsics_c: " << intrinsics_c.coeffs[0] << "- " << intrinsics_c.coeffs[1] << "- " << intrinsics_c.coeffs[2] << "- " << intrinsics_c.coeffs[3] << "- " << intrinsics_c.coeffs[4] << std::endl;
-
-    this->accel_threshold = config.accel_threshold;
-    this->gyro_threshold = config.gyro_threshold;
+    this->accel_threshold = 0.2f;
+    this->gyro_threshold = 0.6f;
 }
 
 void CameraRealSense::realtime() {
     std::cout << "Using RealSense device for real-time capture" << std::endl;
-    this->cfg.enable_stream(RS2_STREAM_COLOR, 640, 480, RS2_FORMAT_RGB8, 30);
+    this->cfg.enable_stream(RS2_STREAM_COLOR, 640, 480, RS2_FORMAT_BGR8, 30);
     this->cfg.enable_stream(RS2_STREAM_DEPTH, 640, 480, RS2_FORMAT_Z16, 30);
     this->cfg.enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F);
     this->cfg.enable_stream(RS2_STREAM_GYRO,  RS2_FORMAT_MOTION_XYZ32F);
@@ -69,6 +61,36 @@ std::tuple<cv::Mat, cv::Mat, bool> CameraRealSense::get_frames(){
 
 cv::Mat CameraRealSense::create_mask(cv::Mat color, cv::Mat depth){
     /* MASK CREATION FOR KEYPOINTS DETECTION */
+    
+    // int histSize = 65536; // Full binning for 16-bit depth images (0-65535)
+    // float range[] = {0, 65535}; // Depth range for 16-bit images
+    // const float* histRange = {range};
+
+    // // Calculate the histogram
+    // cv::Mat hist;
+    // cv::calcHist(&depth, 1, 0, cv::Mat(), hist, 1, &histSize, &histRange);
+
+    // // Normalize the histogram (if you want to visualize it, you can comment this line)
+    // // cv::normalize(hist, hist, 0, 255, cv::NORM_MINMAX);
+
+    // // Save the histogram image (visualization not included in this task, just saving data)
+    // cv::FileStorage fs("depth_histogram.yml", cv::FileStorage::WRITE);
+    
+    // for (int i = 0; i < histSize; ++i) {
+    //     float value = hist.at<float>(i);
+    //     if (value > 0) {
+    //         fs << "num" + std::to_string(i) << value; // Write intensity: numX -> count
+    //     }
+    // }
+    // fs.release();
+
+    // cv::FileStorage fss("depth.yml", cv::FileStorage::WRITE);
+    // fss << "histogram" << hist; // Write depth image
+    // fss.release();
+    
+    // std::cout << "Histogram saved to depth_histogram.yml" << std::endl;
+
+    // exit(1);
 
     int height = color.rows;
     int width = color.cols;

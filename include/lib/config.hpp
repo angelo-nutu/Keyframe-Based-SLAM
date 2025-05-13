@@ -7,6 +7,8 @@
 #include <string>
 #include <yaml-cpp/yaml.h>
 
+#include "defines.hpp"
+
 
 class Config{    
 public:
@@ -19,7 +21,7 @@ public:
 
     float accel_threshold;
     float gyro_threshold;
-    bool realtime;
+    bool replay;
     std::string rosbag_path;
 
     bool yolo;

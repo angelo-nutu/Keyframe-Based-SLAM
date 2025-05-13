@@ -7,7 +7,7 @@ Config::Config(){
 
     accel_threshold = 0.3f;
     gyro_threshold = 0.6f;
-    realtime = true;
+    replay = false;
     rosbag_path = "";
 
     yolo = false;
@@ -28,11 +28,13 @@ Config::Config(std::string& filename) {
 
     accel_threshold = config["camera"]["accel-threshold"].as<float>();
     gyro_threshold = config["camera"]["gyro-threshold"].as<float>();
-    realtime = config["camera"]["realtime"].as<bool>();
+    replay = config["camera"]["replay"].as<bool>();
     rosbag_path = config["camera"]["path"].as<std::string>();
+    rosbag_path.find("~/") != std::string::npos ? rosbag_path.replace(rosbag_path.find("~/"), 2, HOME_PATH) : rosbag_path;
 
     yolo = config["yolo"]["enabled"].as<bool>();
     model_path = config["yolo"]["path"].as<std::string>();
+    model_path.find("~/") != std::string::npos ? model_path.replace(model_path.find("~/"), 2, HOME_PATH) : model_path;
 
     telemetry = config["telemetry"]["enabled"].as<bool>();
     host = config["telemetry"]["host"].as<std::string>();
@@ -51,8 +53,8 @@ Config::Config(std::string& filename) {
     std::cout << "\n";
     std::cout << std::left << std::setw(25) << "Odometry Pose:" 
               << (pose == "pnp" ? "PnP" : (pose == "emat" ? "EMat" : pose)) << "\n";
-    std::cout << std::left << std::setw(25) << "Camera Realtime:" 
-              << (realtime ? "YES" : "NO") << "\n";
+    std::cout << std::left << std::setw(25) << "Camera replay:" 
+              << (replay ? "YES" : "NO") << "\n";
     std::cout << std::left << std::setw(25) << "Camera Path:" 
               << "\"" << rosbag_path << "\"\n";
     std::cout << std::left << std::setw(25) << "YOLO Enabled:" 

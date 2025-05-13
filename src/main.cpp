@@ -118,6 +118,7 @@ int main(int argc, char** argv) {
             plt.draw_plot();
             keep_analyze_frames = plt.check_condition();
         }
+
     }
 
     return 0;

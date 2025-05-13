@@ -4,10 +4,10 @@ odometry:
   pose: "pnp"                 # Pose Estimation Algorithm (pnp, emat)
 
 camera:
-  accel-threshold: 0.3       # Acceleration threshold for detection of camera movement 
-  gyro-threshold: 0.6        # Gyroscope threshold for detection of camera movement
-  realtime: true             # Enable real-time acquisition from the camera
-  path: "../2024_12_15/16_41_35_DV_1_baseline_1.bag"  # Path to the rosbag (if real-time is off)
+  accel-threshold: 0.2       # Acceleration threshold for detection of camera movement 
+  gyro-threshold: 0.3        # Gyroscope threshold for detection of camera movement
+  replay: true             # Enable replay from rosbag
+  path: "~/logs-camera-logger/Baseline_Track/2025_04_26_18_46_13_baseline_Povo.bag"  # Path to the rosbag (if replay is on)
 # TODO: add camera configuration parameters
 
 yolo:
@@ -16,8 +16,8 @@ yolo:
 
 telemetry:
   enabled: false               # Enable telemetry communication
-  host : "control.local"          # Host for telemetry communication ["localhost" / "api.eagletrt.it" / "control.local"]
-  vehicle_id: "hydra"       # Vehicle ID for telemetry
+  host : "api.eagletrt.it"          # Host for telemetry communication ["localhost" / "api.eagletrt.it" / "control.local"]
+  vehicle_id: "nicolo"       # Vehicle ID for telemetry
 
 debug: false                   # Enable debug mode, ence print the debug information
-display: false                 # Display the RGB and depth from camera, as well as features matching done
+display: true                 # Display the RGB and depth from camera, as well as features matching done

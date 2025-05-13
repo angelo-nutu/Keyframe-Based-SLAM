@@ -16,6 +16,8 @@ set(DIR ${CMAKE_CURRENT_LIST_DIR})
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
+configure_file(${DIR}/include/utils/defines.hpp.in ${DIR}/include/lib/defines.hpp)
+
 # canlib definitions
 add_compile_definitions("CANLIB_PARKING=")
 add_compile_definitions(CANLIB_TIMESTAMP)
