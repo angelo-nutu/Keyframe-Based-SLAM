@@ -16,6 +16,8 @@ int main(int argc, char* argv[]) {
     }
 
     Camera camera;
+    VisualOdometry vo(camera.getK());
+    INFO("Initialized Pipeline");
 
     while (true){
         auto frames = camera.GrabFrames();
@@ -25,16 +27,21 @@ int main(int argc, char* argv[]) {
         }
 
         cv::Mat output;
-        auto [rgb, depth] = *frames;
+        auto [rgb, depth, mask] = *frames;
 
-        cv::cvtColor(rgb, rgb, cv::COLOR_RGB2BGR);
+        vo.Track(rgb, depth, mask);
+        
+        // cv::convertScaleAbs(depth, depth, 0.02);
+        // cv::applyColorMap(depth, depth, cv::COLORMAP_JET);
 
-        cv::convertScaleAbs(depth, depth, 0.02);
-        cv::applyColorMap(depth, depth, cv::COLORMAP_JET);
+        // if (mask.channels() == 1) {
+        //     cv::cvtColor(mask, mask, cv::COLOR_GRAY2BGR);
+        // }
 
-        cv::hconcat(rgb, depth, output);
-        cv::imshow("Output", output);
-        cv::waitKey(1);
+        // cv::hconcat(rgb, depth, output);
+        // cv::hconcat(output, mask, output);
+        // cv::imshow("Output", output);
+        // cv::waitKey(1);
     }
     
 

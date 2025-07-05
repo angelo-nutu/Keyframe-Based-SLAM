@@ -8,10 +8,17 @@
 
 class VisualOdometry{
 public:
-    VisualOdometry();
+    VisualOdometry(cv::Mat K);
+
+    void Track(cv::Mat rgbFrame, cv::Mat depthFrame, cv::Mat maskFrame);
     
 private:
     cv::Ptr<cv::xfeatures2d::SURF> ptrExtractor;
     cv::Ptr<cv::FlannBasedMatcher> ptrMatcher;
 
+    cv::Mat matPrevRgb, matPrevDepth;
+    std::vector<cv::KeyPoint> kpPrevImg;
+    cv::Mat dpPrevImg;
+
+    cv::Mat K;
 };

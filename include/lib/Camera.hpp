@@ -15,9 +15,10 @@ public:
     Camera();
     ~Camera();
 
-    void Capture(std::string protocol, std::string port, std::string topic);
+    void Capture(std::string protocol, std::string port, std::string topicRGBD, std::string topicIntrinsics);
 
-    std::optional<std::pair<cv::Mat, cv::Mat>> GrabFrames();
+    std::optional<std::tuple<cv::Mat, cv::Mat, cv::Mat>> GrabFrames();
+    cv::Mat getK();
 
 private:
     zmq::context_t zmqContext;
@@ -25,7 +26,11 @@ private:
 
     cv::Mat matRgbLast;
     cv::Mat matDepthLast;
-    bool bBoth;
+    cv::Mat matMaskLast;
+    bool bAll;
+
+    Intrinsics itrK;
+    std::atomic<bool> bKReady;
 
     std::thread thrCapture;
     std::atomic<bool> bRunThread;

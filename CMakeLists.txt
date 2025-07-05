@@ -3,6 +3,9 @@ project(VO LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(COMMON_WARNINGS -Wshadow)
+set(COMMON_DEBUG_FLAGS -g -Og)
+set(COMMON_RELEASE_FLAGS -O3 -march=native -flto)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -44,18 +47,23 @@ target_include_directories(vo
             ${EAGLE_AS_SERIALIZERS_LIB}
 )
 
-target_compile_options(vo PRIVATE -Wshadow)
-
-target_compile_options(vo PRIVATE
-    $<$<CONFIG:Debug>:-g -Og -fsanitize=address,undefined>
-    $<$<CONFIG:Release>:-O3 -march=native -flto>
+target_compile_options(VO_LIB PRIVATE
+    ${COMMON_WARNINGS}
+    $<$<CONFIG:Debug>:${COMMON_DEBUG_FLAGS}>
+    $<$<CONFIG:Release>:${COMMON_RELEASE_FLAGS}>
 )
 
-target_link_options(vo PRIVATE
-    $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+target_compile_options(vo PRIVATE
+    ${COMMON_WARNINGS}
+    $<$<CONFIG:Debug>:${COMMON_DEBUG_FLAGS}>
+    $<$<CONFIG:Release>:${COMMON_RELEASE_FLAGS}>
 )
 
 target_compile_definitions(vo PRIVATE
+    $<$<CONFIG:Debug>:DEBUG>
+)
+
+target_compile_definitions(VO_LIB PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
 )
 
