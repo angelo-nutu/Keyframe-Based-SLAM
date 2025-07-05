@@ -16,3 +16,6 @@
 [submodule "external/mqtt-topics"]
 	path = external/mqtt-topics
 	url = git@github.com:eagletrt/telemetry-mqtt-topics.git
+[submodule "external/as-serializers"]
+	path = external/as-serializers
+	url = git@github.com:eagletrt/as-serializers.git

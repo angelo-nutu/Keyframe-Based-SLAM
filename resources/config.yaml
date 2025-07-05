@@ -4,10 +4,10 @@ odometry:
   pose: "pnp"                 # Pose Estimation Algorithm (pnp, emat)
 
 camera:
-  accel-threshold: 0.2       # Acceleration threshold for detection of camera movement 
-  gyro-threshold: 0.3        # Gyroscope threshold for detection of camera movement
+  accel-threshold: 0.3       # Acceleration threshold for detection of camera movement 
+  gyro-threshold: 0.4        # Gyroscope threshold for detection of camera movement
   replay: true             # Enable replay from rosbag
-  path: "~/logs-camera-logger/Baseline_Track/2025_04_26_18_46_13_baseline_Povo.bag"  # Path to the rosbag (if replay is on)
+  path: "/home/angelo/Projects/EagleTRT/cone-localization/2025_04_26_18_46_13_baseline_Povo.bag"  # Path to the rosbag (if replay is on)
 # TODO: add camera configuration parameters
 
 yolo:
