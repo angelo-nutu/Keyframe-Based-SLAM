@@ -1,0 +1,13 @@
+#pragma once
+
+#include <rerun.hpp>
+#include <opencv2/opencv.hpp>
+
+class Viewer{
+public:
+    Viewer();
+
+    void update(std::vector<cv::Point2d> trajectory, cv::Mat rgb, cv::Mat depth, cv::Mat mask);
+private:
+    rerun::RecordingStream recStream;
+};

@@ -3,6 +3,7 @@
 
 #include "VisualOdometry.hpp"
 #include "Camera.hpp"
+#include "Viewer.hpp"
 #include "Utils.hpp"
 
 int main(int argc, char* argv[]) {
@@ -16,32 +17,28 @@ int main(int argc, char* argv[]) {
     }
 
     Camera camera;
-    VisualOdometry vo(camera.getK());
+    VisualOdometry vo(camera.getIntrinsics());
+    Viewer viewer;
     INFO("Initialized Pipeline");
 
     while (true){
         auto frames = camera.GrabFrames();
-        if(!frames){
+        if (!frames) {
             INFO("Frames weren't acquired");
             continue;
         }
 
-        cv::Mat output;
         auto [rgb, depth, mask] = *frames;
 
-        vo.Track(rgb, depth, mask);
-        
-        // cv::convertScaleAbs(depth, depth, 0.02);
-        // cv::applyColorMap(depth, depth, cv::COLORMAP_JET);
+        auto trajectory = vo.Track(rgb.clone(), depth.clone(), mask.clone());
+        if(!trajectory){
+            INFO("A new pose wasn't calculated");
+            continue;
+        }
 
-        // if (mask.channels() == 1) {
-        //     cv::cvtColor(mask, mask, cv::COLOR_GRAY2BGR);
-        // }
+        viewer.update(*trajectory, rgb.clone(), depth.clone(), mask.clone());
 
-        // cv::hconcat(rgb, depth, output);
-        // cv::hconcat(output, mask, output);
-        // cv::imshow("Output", output);
-        // cv::waitKey(1);
+
     }
     
 

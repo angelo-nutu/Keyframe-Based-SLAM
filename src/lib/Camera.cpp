@@ -105,7 +105,7 @@ std::optional<std::tuple<cv::Mat, cv::Mat, cv::Mat>> Camera::GrabFrames(){
     return std::make_tuple(this->matRgbLast.clone(), this->matDepthLast.clone(), this->matMaskLast.clone());
 }
 
-cv::Mat Camera::getK(){
+std::pair<cv::Mat, cv::Mat> Camera::getIntrinsics(){
     while(true){
         {   
             std::lock_guard<std::mutex> lock(this->mtxImgs);
@@ -113,8 +113,12 @@ cv::Mat Camera::getK(){
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    return  (cv::Mat_<double>(3,3) <<
-                this->itrK.fx, 0,             this->itrK.ppx,
-                0,             this->itrK.fy, this->itrK.ppy,
-                0,             0,             1             );
+    return std::make_pair((
+        cv::Mat_<double>(3,3) <<
+            this->itrK.fx, 0,             this->itrK.ppx,
+            0,             this->itrK.fy, this->itrK.ppy,
+            0,             0,             1             ), (
+        cv::Mat_<double>(5, 1) <<
+            this->itrK.coeffs[0], this->itrK.coeffs[1], this->itrK.coeffs[2], this->itrK.coeffs[3], this->itrK.coeffs[4]
+        ));
 }

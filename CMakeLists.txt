@@ -4,7 +4,7 @@ project(VO LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(COMMON_WARNINGS -Wshadow)
-set(COMMON_DEBUG_FLAGS -g -Og)
+set(COMMON_DEBUG_FLAGS -g -Og -fsanitize=address)
 set(COMMON_RELEASE_FLAGS -O3 -march=native -flto)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -14,6 +14,10 @@ endif()
 find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ZMQ REQUIRED libzmq)
+include(FetchContent)
+FetchContent_Declare(rerun_sdk
+    URL https://github.com/rerun-io/rerun/releases/latest/download/rerun_cpp_sdk.zip)
+FetchContent_MakeAvailable(rerun_sdk)
 
 add_subdirectory(external/as-serializers)
 
@@ -23,13 +27,13 @@ add_library(VO_LIB STATIC ${LIB_SRCS})
 target_link_libraries(VO_LIB
     PUBLIC as-serializers
            ${ZMQ_LIBRARIES}
+           rerun_sdk
 )
 
 target_include_directories(VO_LIB
     PUBLIC include/lib
            ${OpenCV_INCLUDE_DIRS}
            ${ZMQ_INCLUDE_DIRS}
-           
 )
 
 add_executable(vo src/executable/main.cpp)
@@ -38,6 +42,7 @@ target_link_libraries(vo
             ${OpenCV_LIBS}
             as-serializers
             ${ZMQ_LIBRARIES}
+            rerun_sdk
             pthread
 )
 
@@ -61,6 +66,14 @@ target_compile_options(vo PRIVATE
 
 target_compile_definitions(vo PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
+)
+
+target_link_options(vo PRIVATE
+    -fsanitize=address
+)
+
+target_link_options(VO_LIB PRIVATE
+    -fsanitize=address
 )
 
 target_compile_definitions(VO_LIB PRIVATE

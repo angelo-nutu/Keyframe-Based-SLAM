@@ -18,7 +18,7 @@ public:
     void Capture(std::string protocol, std::string port, std::string topicRGBD, std::string topicIntrinsics);
 
     std::optional<std::tuple<cv::Mat, cv::Mat, cv::Mat>> GrabFrames();
-    cv::Mat getK();
+    std::pair<cv::Mat, cv::Mat> getIntrinsics();
 
 private:
     zmq::context_t zmqContext;
