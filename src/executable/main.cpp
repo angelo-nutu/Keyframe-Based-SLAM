@@ -30,14 +30,13 @@ int main(int argc, char* argv[]) {
 
         auto [rgb, depth, mask] = *frames;
 
-        auto trajectory = vo.Track(rgb.clone(), depth.clone(), mask.clone());
-        if(!trajectory){
+        bool success = vo.Track(rgb.clone(), depth.clone(), mask.clone());
+        if(!success){
             INFO("A new pose wasn't calculated");
             continue;
         }
 
-        viewer.update(*trajectory, rgb.clone(), depth.clone(), mask.clone());
-
+        viewer.update(vo.GetTrajectory(), vo.GetKeyFrames(), rgb.clone(), depth.clone(), mask.clone());
 
     }
     

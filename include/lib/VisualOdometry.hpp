@@ -15,18 +15,38 @@ public:
     VisualOdometry(std::pair<cv::Mat, cv::Mat>);
     // ~VisualOdometry();
 
-    std::optional<std::vector<cv::Point2d>> Track(cv::Mat rgbFrame, cv::Mat depthFrame, cv::Mat maskFrame);
-    
+    bool Track(cv::Mat, cv::Mat, cv::Mat);
+    std::vector<cv::Point2d> GetTrajectory();
+    std::vector<cv::Point2d> GetKeyFrames();
 private:
-    cv::Ptr<cv::xfeatures2d::SURF> ptrExtractor;
-    cv::Ptr<cv::FlannBasedMatcher> ptrMatcher;
+    struct KeyFrame {
+        cv::Mat matFrame;
+        cv::Mat matDepth;
+        std::vector<cv::KeyPoint> vecKeypoints;
+        cv::Mat matDescriptors;
+        cv::Mat matPose;
+    };
 
-    cv::Mat matPrevRgb, matPrevDepth;
-    std::vector<cv::KeyPoint> kpPrevImg;
-    cv::Mat dpPrevImg;
-
+    
+    // cv::Ptr<cv::xfeatures2d::SURF> ptrExtractor;
+    // cv::Ptr<cv::FlannBasedMatcher> ptrMatcher;
+    cv::Ptr<cv::ORB> ptrExtractor;
+    cv::Ptr<cv::BFMatcher> ptrMatcher;
+    
+    // cv::Mat matPrevRgb, matPrevDepth;
+    // std::vector<cv::KeyPoint> kpPrevImg;
+    // cv::Mat dpPrevImg;
+    
     cv::Mat K;
     cv::Mat DistCoeffs;
-
+    
     std::vector<cv::Mat> poses;
+    std::vector<VisualOdometry::KeyFrame> vecOdometry;
+    VisualOdometry::KeyFrame kfLast;
+
+    std::pair<std::vector<cv::KeyPoint>, cv::Mat> ExtractFeatures(cv::Mat, cv::Mat);
+    std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> MatchFeatures(cv::Mat, std::vector<cv::KeyPoint>);
+    std::tuple<bool, cv::Mat, float> EstimatePose(std::vector<cv::Point3f>, std::vector<cv::Point2f>);
+    bool ShouldAddKeyFrame(float);
+    void CullKeyframes();
 };
