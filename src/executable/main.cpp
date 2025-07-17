@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "VisualOdometry.hpp"
+#include "Map.hpp"
 #include "Camera.hpp"
 #include "Viewer.hpp"
 #include "Utils.hpp"
@@ -17,7 +18,8 @@ int main(int argc, char* argv[]) {
     }
 
     Camera camera;
-    VisualOdometry vo(camera.getIntrinsics());
+    std::shared_ptr<Map> map = std::make_shared<Map>(camera.getIntrinsics().first);
+    VisualOdometry vo(camera.getIntrinsics(), map);
     Viewer viewer;
     INFO("Initialized Pipeline");
 
@@ -36,7 +38,7 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        viewer.update(vo.GetTrajectory(), vo.GetKeyFrames(), rgb.clone(), depth.clone(), mask.clone());
+        viewer.update(vo.GetTrajectory(), map->GetKeyFrames(), map->GetMapPoints(), rgb.clone(), depth.clone(), mask.clone());
 
     }
     

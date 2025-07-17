@@ -7,7 +7,7 @@ class Viewer{
 public:
     Viewer();
 
-    void update(std::vector<cv::Point2d> trajectory, std::vector<cv::Point2d> keyframes, cv::Mat rgb, cv::Mat depth, cv::Mat mask);
+    void update(std::vector<cv::Point3d> trajectory, std::vector<cv::Point3d> keyframes, std::vector<cv::Point3d> mapPoints, cv::Mat rgb, cv::Mat depth, cv::Mat mask);
 private:
     rerun::RecordingStream recStream;
 };
