@@ -54,12 +54,16 @@ void Map::CreateMapPoints(std::vector<cv::DMatch> matches) {
                 position
             );
 
+            LOG("New MapPoint created"); 
+
             prevKf->vecMapPoints[match.queryIdx] = newMapPoint;
             currKf->vecMapPoints[match.trainIdx] = newMapPoint;
             newMapPoint->AddObservation(prevKf, match.queryIdx);
             newMapPoint->AddObservation(currKf, match.trainIdx);
 
         } else {
+            LOG("New MapPoint created");
+            
             currKf->vecMapPoints[match.trainIdx] = prevKf->vecMapPoints[match.queryIdx];
             prevKf->vecMapPoints[match.queryIdx]->AddObservation(currKf, match.trainIdx);
         }
@@ -165,34 +169,12 @@ void Map::UpdateMap() {
     this->vecMapPoints.clear();
 
     for (const auto& kf : this->vecKeyFrames) {
-        const cv::Mat& depth = kf->matDepth;
-        const cv::Mat& pose = kf->matPose;
-
-        for (const auto& kp : kf->vecKeypoints) {
-            float u = kp.pt.x;
-            float v = kp.pt.y;
-
-            uint16_t d = depth.at<uint16_t>(cvRound(v), cvRound(u));
-            if (d == 0) continue; 
-            float z = d * 0.001f;  
-            float fx = K.at<double>(0, 0);
-            float fy = K.at<double>(1, 1);
-            float cx = K.at<double>(0, 2);
-            float cy = K.at<double>(1, 2);
-
-            float x = (u - cx) * z / fx;
-            float y = (v - cy) * z / fy;
-
-            cv::Mat ptCam = (cv::Mat_<double>(4, 1) << x, y, z, 1.0);
-            cv::Mat ptWorld = pose * ptCam;
-
-            this->vecMapPoints.push_back(
-                cv::Point3d(
-                    ptWorld.at<double>(0),           // X
-                    -ptWorld.at<double>(2),          // -Z
-                    -ptWorld.at<double>(1)            // Y
-                )
-            );
+        
+        for (const auto& mp : kf->vecMapPoints) {
+            if (mp) {
+                LOG("MapPoint Position: " << mp->GetPosition());
+                this->vecMapPoints.push_back(mp->GetPosition());
+            }
         }
     }
 }

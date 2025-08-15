@@ -18,6 +18,10 @@ public:
         this->mapObservations.erase(keyframe);
     }
 
+    cv::Point3d GetPosition() const {
+        return this->ptPosition;
+    }
+
     bool IsBad() const {
         return this->mapObservations.size() < 2;
     }

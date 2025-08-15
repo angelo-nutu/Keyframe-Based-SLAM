@@ -29,8 +29,6 @@ private:
     cv::Mat DistCoeffs;
     
     std::vector<cv::Mat> poses;
-    // std::vector<KeyFrame> vecOdometry;
-    // KeyFrame kfLast;
 
     std::shared_ptr<Map> map;
 

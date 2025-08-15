@@ -42,6 +42,7 @@ std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> VisualOdometry::Ma
     for (size_t i = 0; i < knnMatches.size(); i++) {
         if (knnMatches[i][0].distance < 0.6f * knnMatches[i][1].distance) {
             cv::DMatch match = knnMatches[i][0];
+            matches.push_back(match);
             const cv::KeyPoint& kpPrev = keyframe->vecKeypoints[match.queryIdx];
             const cv::KeyPoint& kpCurr = kpCurrImg[match.trainIdx];
 
@@ -156,12 +157,6 @@ bool VisualOdometry::Track(cv::Mat rgbFrame, cv::Mat depthFrame, cv::Mat maskFra
 
         this->map->AddKeyframe(keyFrame);
         this->map->CreateMapPoints(matches);
-
-        // create MapPoints based on matches ffs, which actually needs dufddsds 
-        // I need matches to create MapPoint basically, since I'll create them solely if I have 2+ observations
-        // otherwise it's quite useless. Now to think on how to distinguish a MapPoint with previous observations or not.
-        // this should be handled by map lowkey
-        // this->map->CreateMapPoints()
 
     }
     

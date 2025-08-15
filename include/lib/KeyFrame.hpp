@@ -16,6 +16,18 @@ public:
     matDescriptors(des),
     matPose(pose) {};
 
+    KeyFrame(const KeyFrame& other) {
+        this->id = other.id;
+        this->matFrame = other.matFrame;
+        this->matDepth = other.matDepth;
+        this->vecKeypoints = other.vecKeypoints;
+        this->vecMapPointObserved = other.vecMapPointObserved;
+        this->vecMapPoints = other.vecMapPoints;
+        this->matDescriptors = other.matDescriptors;
+        this->matPose = other.matPose;
+    }
+
+
     int id;
     cv::Mat matFrame;
     cv::Mat matDepth;

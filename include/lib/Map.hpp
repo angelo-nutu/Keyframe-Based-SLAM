@@ -20,8 +20,6 @@ private:
 
     cv::Mat K;
     std::vector<cv::Point3d> vecMapPoints;
-    std::vector<MapPoint> _vecMapPoints;
-    std::map<std::pair<int, int>, std::shared_ptr<MapPoint>> mapPoints;
 
     void CullKeyframes();
     void UpdateMap();
