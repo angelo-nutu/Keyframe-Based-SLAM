@@ -2,10 +2,11 @@
 #include <iostream>
 
 #include "VisualOdometry.hpp"
-#include "Map.hpp"
+#include "Optimizers.hpp"
 #include "Camera.hpp"
 #include "Viewer.hpp"
 #include "Utils.hpp"
+#include "Map.hpp"
 
 int main(int argc, char* argv[]) {
     
@@ -21,6 +22,7 @@ int main(int argc, char* argv[]) {
     std::shared_ptr<Map> map = std::make_shared<Map>(camera.getIntrinsics().first);
     VisualOdometry vo(camera.getIntrinsics(), map);
     Viewer viewer;
+    Optimizers::BundleAdjustment localBA(camera.getIntrinsics().first, map);
     INFO("Initialized Pipeline");
 
     while (true){
@@ -32,13 +34,20 @@ int main(int argc, char* argv[]) {
 
         auto [rgb, depth, mask] = *frames;
 
-        bool success = vo.Track(rgb.clone(), depth.clone(), mask.clone());
+        bool addedKeyFrame;
+        bool success = vo.Track(rgb.clone(), depth.clone(), mask.clone(), addedKeyFrame);
         if(!success){
             INFO("A new pose wasn't calculated");
             continue;
         }
 
-        viewer.update(vo.GetTrajectory(), map->GetKeyFrames(), map->GetMapPoints(), rgb.clone(), depth.clone(), mask.clone());
+        // auto start = std::chrono::high_resolution_clock::now();
+        if(addedKeyFrame)
+            localBA.Optimize();
+        // auto end = std::chrono::high_resolution_clock::now();
+        // std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms\n";
+
+        viewer.Update(map->GetKeyFramesPositions(), map->GetKeyFramesPositions(), map->GetMapPointsPositions(), rgb.clone(), depth.clone(), mask.clone());
 
     }
     

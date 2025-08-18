@@ -3,11 +3,13 @@
 #include <rerun.hpp>
 #include <opencv2/opencv.hpp>
 
+#include <Eigen/Core>
+
 class Viewer{
 public:
     Viewer();
 
-    void update(std::vector<cv::Point3d> trajectory, std::vector<cv::Point3d> keyframes, std::vector<cv::Point3d> mapPoints, cv::Mat rgb, cv::Mat depth, cv::Mat mask);
+    void Update(std::vector<Eigen::Vector3d> trajectory, std::vector<Eigen::Vector3d> keyframes, std::vector<Eigen::Vector3d> mapPoints, cv::Mat rgb, cv::Mat depth, cv::Mat mask);
 private:
     rerun::RecordingStream recStream;
 };

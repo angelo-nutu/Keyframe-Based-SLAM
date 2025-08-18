@@ -10,14 +10,12 @@ Viewer::Viewer():
     
 }
 
-void Viewer::update(std::vector<cv::Point3d> trajectory, std::vector<cv::Point3d> keyframes, std::vector<cv::Point3d> mapPoints, cv::Mat rgb, cv::Mat depth, cv::Mat mask){
-    std::cout << "IMPORTANT. Trajectory size is: " << trajectory.size() << std::endl;
-    std::cout << "IMPORTANT. Keyframes size is: " << keyframes.size() << std::endl;
+void Viewer::Update(std::vector<Eigen::Vector3d> trajectory, std::vector<Eigen::Vector3d> keyframes, std::vector<Eigen::Vector3d> mapPoints, cv::Mat rgb, cv::Mat depth, cv::Mat mask){
 
     std::vector<rerun::Position3D> traj;
-    for(const cv::Point3f& pt : trajectory){
+    for(const Eigen::Vector3d& pt : trajectory){
         traj.push_back(
-            rerun::Position3D(pt.x, pt.y, pt.z)
+            rerun::Position3D(pt.x(), pt.y(), pt.z())
         );
     }
     rerun::LineStrip3D line(traj);
@@ -30,9 +28,9 @@ void Viewer::update(std::vector<cv::Point3d> trajectory, std::vector<cv::Point3d
     );
 
     std::vector<rerun::Position3D> kfs;
-    for(const cv::Point3f& pt : keyframes){
+    for(const Eigen::Vector3d& pt : keyframes){
         kfs.push_back(
-            rerun::Position3D(pt.x, pt.y, pt.z)
+            rerun::Position3D(pt.x(), pt.y(), pt.z())
         );
     } 
 
@@ -44,9 +42,9 @@ void Viewer::update(std::vector<cv::Point3d> trajectory, std::vector<cv::Point3d
     );
 
     std::vector<rerun::Position3D> map;
-    for(const cv::Point3f& pt : mapPoints){
+    for(const Eigen::Vector3d& pt : mapPoints){
         map.push_back(
-            rerun::Position3D(pt.x, pt.y, pt.z)
+            rerun::Position3D(pt.x(), pt.y(), pt.z())
         );
     } 
 

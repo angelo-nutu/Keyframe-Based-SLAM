@@ -19,3 +19,9 @@
 [submodule "external/as-serializers"]
 	path = external/as-serializers
 	url = git@github.com:eagletrt/as-serializers.git
+[submodule "external/Ceres"]
+	path = external/Ceres
+	url = https://github.com/ceres-solver/ceres-solver.git
+[submodule "external/Sophus"]
+	path = external/Sophus
+	url = https://github.com/strasdat/Sophus.git

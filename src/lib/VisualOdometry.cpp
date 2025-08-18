@@ -5,10 +5,10 @@ VisualOdometry::VisualOdometry(std::pair<cv::Mat, cv::Mat> intrinsics, std::shar
     DistCoeffs(intrinsics.second),
     map(map),
     poses{[] {
-            return cv::Mat::eye(4, 4, CV_64F); 
+            return Sophus::SE3d(); 
         }()} {
     ptrExtractor = cv::ORB::create(
-        2000,                       
+        3000,                       
         1.2f, 8, 31, 0, 2,          
         cv::ORB::HARRIS_SCORE,      
         31,                         
@@ -29,7 +29,7 @@ std::pair<std::vector<cv::KeyPoint>, cv::Mat> VisualOdometry::ExtractFeatures(cv
     return {kpCurrImg, dpCurrImg};
 }
 
-std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> VisualOdometry::MatchFeatures(cv::Mat dpCurrImg, std::vector<cv::KeyPoint> kpCurrImg, std::vector<cv::DMatch>& matches) {
+std::pair<std::vector<cv::Point3d>, std::vector<cv::Point2d>> VisualOdometry::MatchFeatures(cv::Mat dpCurrImg, std::vector<cv::KeyPoint> kpCurrImg, std::vector<cv::DMatch>& matches) {
     std::shared_ptr<KeyFrame> keyframe = this->map->GetLastKeyFrame();
 
     std::vector<std::vector<cv::DMatch>> knnMatches;
@@ -37,8 +37,8 @@ std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> VisualOdometry::Ma
 
     std::vector<MapPoint*> candidates;
     
-    std::vector<cv::Point3f> points3D;
-    std::vector<cv::Point2f> points2D;
+    std::vector<cv::Point3d> points3D;
+    std::vector<cv::Point2d> points2D;
     for (size_t i = 0; i < knnMatches.size(); i++) {
         if (knnMatches[i][0].distance < 0.6f * knnMatches[i][1].distance) {
             cv::DMatch match = knnMatches[i][0];
@@ -50,7 +50,7 @@ std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> VisualOdometry::Ma
             float y = (kpPrev.pt.y - this->K.at<double>(1, 2)) * z / K.at<double>(1, 1);
             float x = (kpPrev.pt.x - this->K.at<double>(0, 2)) * z / K.at<double>(0, 0);
         
-            points3D.push_back(cv::Point3f(x, y, z));
+            points3D.push_back(cv::Point3d(x, y, z));
             points2D.push_back(kpCurr.pt);
         }
     }
@@ -58,10 +58,11 @@ std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> VisualOdometry::Ma
     return {points3D, points2D};
 }
 
-std::tuple<bool, cv::Mat, float> VisualOdometry::EstimatePose(std::vector<cv::Point3f> points3D, std::vector<cv::Point2f> points2D) {
+std::tuple<bool, Sophus::SE3d, float> VisualOdometry::EstimatePose(std::vector<cv::Point3d> points3D, std::vector<cv::Point2d> points2D) {
     
     bool success = false;
-    cv::Mat rvec, tvec, T;
+    cv::Mat rvec, tvec;
+    Sophus::SE3d T;
     std::vector<int> inliers = {0};
     float ratio = 0.0;
     
@@ -69,14 +70,19 @@ std::tuple<bool, cv::Mat, float> VisualOdometry::EstimatePose(std::vector<cv::Po
                                     rvec, tvec, false, 100, 8.0, 0.99, inliers);
     
     if (success) {
-        cv::Mat R;
-        cv::Rodrigues(rvec, R);
-    
-        cv::Mat tRel = cv::Mat::eye(4, 4, CV_64F);
-        R.copyTo(tRel(cv::Rect(0, 0, 3, 3))); 
-        tvec.copyTo(tRel(cv::Rect(3, 0, 1, 3))); 
-    
-        T = this->map->GetLastKeyFrame()->matPose * tRel;
+        cv::Mat R_cv;
+        cv::Rodrigues(rvec, R_cv);
+
+        Eigen::Matrix3d R;
+        cv::cv2eigen(R_cv, R);
+
+        Eigen::Vector3d t;
+        cv::cv2eigen(tvec, t);
+
+        Sophus::SE3d T_cw = Sophus::SE3d(R, t);
+        Sophus::SE3d T_wc = T_cw.inverse(); 
+
+        T = this->map->GetLastKeyFrame()->sophPose * T_wc;
         this->poses.push_back(T);
 
         ratio = static_cast<float>(inliers.size()) / points2D.size();
@@ -96,20 +102,15 @@ bool VisualOdometry::ShouldAddKeyFrame(float inliers){
     if (framesSinceLastKf < 10)
         return false;
 
-    cv::Mat tRel = this->map->GetLastKeyFrame()->matPose.inv() * this->poses.back();
+    Sophus::SE3d tRel = this->map->GetLastKeyFrame()->sophPose.inverse() * this->poses.back();
 
-    double dx = tRel.at<double>(0, 3);
-    double dy = tRel.at<double>(1, 3);
-    double dz = tRel.at<double>(2, 3);
-    double translation = std::sqrt(dx*dx + dy*dy + dz*dz);
+    Eigen::Vector3d trans = tRel.translation();
+    double translation = trans.norm();
 
     addKf |= translation > 0.5;
 
-    cv::Mat rRel = tRel(cv::Rect(0, 0, 3, 3));
-    cv::Mat rvec;
-    cv::Rodrigues(rRel, rvec);
-    double angleRad = cv::norm(rvec);
-    double angleDeg = angleRad * 180.0 / CV_PI;
+    double angleRad = tRel.so3().log().norm();
+    double angleDeg = angleRad * 180.0 / M_PI;
 
     addKf |= angleDeg > 5;
 
@@ -119,17 +120,17 @@ bool VisualOdometry::ShouldAddKeyFrame(float inliers){
         framesSinceLastKf = 0;
 
     return addKf;
-
 }
 
-bool VisualOdometry::Track(cv::Mat rgbFrame, cv::Mat depthFrame, cv::Mat maskFrame){
+
+bool VisualOdometry::Track(cv::Mat rgbFrame, cv::Mat depthFrame, cv::Mat maskFrame, bool &addKeyframe){
     if(rgbFrame.empty() || depthFrame.empty()){
         ERROR("The provided images were empty!");
         FIX("Check if the acquisition thread runs succesfully.");
         return false;
     }
 
-    bool success = false, addKeyframe = false;
+    bool success = false;
 
     auto [kpCurrImg, dpCurrImg] = this->ExtractFeatures(rgbFrame, maskFrame);
 
@@ -157,19 +158,25 @@ bool VisualOdometry::Track(cv::Mat rgbFrame, cv::Mat depthFrame, cv::Mat maskFra
 
         this->map->AddKeyframe(keyFrame);
         this->map->CreateMapPoints(matches);
-
+        
     }
     
 
     return success;
 }
 
-std::vector<cv::Point3d> VisualOdometry::GetTrajectory() {
-    std::vector<cv::Point3d> trajectory;
+std::vector<Eigen::Vector3d> VisualOdometry::GetTrajectory() {
+    std::vector<Eigen::Vector3d> trajectory;
+    trajectory.reserve(this->poses.size());
 
-    for (auto &&pose : this->poses) {
-        trajectory.push_back({pose.at<double>(0, 3), -pose.at<double>(2, 3), -pose.at<double>(1, 3)});
+    for (const auto& pose : this->poses) {
+        Eigen::Vector3d t = pose.translation();
+
+        Eigen::Vector3d transformed_t(t.x(), -t.z(), -t.y());
+
+        trajectory.push_back(transformed_t);
     }
-    
+
     return trajectory;
 }
+

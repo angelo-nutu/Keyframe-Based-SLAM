@@ -7,7 +7,7 @@ class KeyFrame;
 
 class MapPoint {
 public:
-    MapPoint(cv::Point3d position) : 
+    MapPoint(Eigen::Vector3d position) : 
     ptPosition(position) {}
 
     void AddObservation(std::shared_ptr<KeyFrame> keyframe, int keypointIdx) {
@@ -18,7 +18,11 @@ public:
         this->mapObservations.erase(keyframe);
     }
 
-    cv::Point3d GetPosition() const {
+    void SetPosition(Eigen::Vector3d pt) {
+        this->ptPosition = pt;
+    }
+
+    Eigen::Vector3d GetPosition() const {
         return this->ptPosition;
     }
 
@@ -30,7 +34,7 @@ public:
         return this->mapObservations;
     }
 private:
-    cv::Point3d ptPosition;
+    Eigen::Vector3d ptPosition;
     std::map<std::weak_ptr<KeyFrame>, int, std::owner_less<std::weak_ptr<KeyFrame>>> mapObservations;
 
 };

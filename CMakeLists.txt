@@ -6,6 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(COMMON_WARNINGS -Wshadow)
 set(COMMON_DEBUG_FLAGS -g -Og -fsanitize=address)
 set(COMMON_RELEASE_FLAGS -O3 -march=native -flto)
+set(BUILD_TESTING OFF CACHE BOOL "Disable tests")
+set(CERES_BUILD_TESTING OFF CACHE BOOL "Disable Ceres tests")
+set(BUILD_EXAMPLES OFF CACHE BOOL "Disable Ceres examples")
+set(CERES_ENABLE_EXAMPLES OFF CACHE BOOL "Disable Ceres examples")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -20,6 +25,8 @@ FetchContent_Declare(rerun_sdk
 FetchContent_MakeAvailable(rerun_sdk)
 
 add_subdirectory(external/as-serializers)
+add_subdirectory(external/Ceres)
+add_subdirectory(external/Sophus)
 
 file(GLOB LIB_SRCS "src/lib/*.cpp")
 
@@ -28,12 +35,16 @@ target_link_libraries(VO_LIB
     PUBLIC as-serializers
            ${ZMQ_LIBRARIES}
            rerun_sdk
+           Ceres::ceres
+           Sophus::Sophus
 )
 
 target_include_directories(VO_LIB
     PUBLIC include/lib
            ${OpenCV_INCLUDE_DIRS}
            ${ZMQ_INCLUDE_DIRS}
+           ${CMAKE_SOURCE_DIR}/external/Sophus
+           ${CMAKE_SOURCE_DIR}/external/Ceres
 )
 
 add_executable(vo src/executable/main.cpp)
@@ -44,12 +55,16 @@ target_link_libraries(vo
             ${ZMQ_LIBRARIES}
             rerun_sdk
             pthread
+            Ceres::ceres
+            Sophus::Sophus
 )
 
 target_include_directories(vo
     PRIVATE ${OpenCV_INCLUDE_DIRS}
             ${ZMQ_INCLUDE_DIRS}
             ${EAGLE_AS_SERIALIZERS_LIB}
+            ${CMAKE_SOURCE_DIR}/external/Sophus
+            ${CMAKE_SOURCE_DIR}/external/Ceres
 )
 
 target_compile_options(VO_LIB PRIVATE

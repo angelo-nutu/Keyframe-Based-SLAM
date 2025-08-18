@@ -11,17 +11,15 @@ void Map::AddKeyframe(KeyFrame keyFrame){
     this->kfLast = std::make_shared<KeyFrame>(keyFrame);
     this->vecKeyFrames.push_back(this->kfLast);
 
-    this->CullKeyframes();
-    this->UpdateMap();
-
-    std::cout << "Number of MapPoints: " << this->kfLast->vecMapPoints.size() << std::endl;
 }
 
 void Map::CreateMapPoints(std::vector<cv::DMatch> matches) {
+    
     if(matches.empty()) return;
-
+    
     std::shared_ptr<KeyFrame> prevKf = this->vecKeyFrames[this->vecKeyFrames.size() - 2];
     std::shared_ptr<KeyFrame> currKf = this->vecKeyFrames[this->vecKeyFrames.size() - 1];
+
 
     for (const auto& match: matches) {
         const cv::KeyPoint& kpPrev = prevKf->vecKeypoints[match.queryIdx];
@@ -41,20 +39,14 @@ void Map::CreateMapPoints(std::vector<cv::DMatch> matches) {
             float x = (u - cx) * z / fx;
             float y = (v - cy) * z / fy;
 
-            cv::Mat ptCam = (cv::Mat_<double>(4, 1) << x, y, z, 1.0);
-            cv::Mat ptWorld = prevKf->matPose * ptCam;
+            Eigen::Vector3d ptCam(x, y, z);
 
-            cv::Point3d position(
-                ptWorld.at<double>(0),           // X
-                -ptWorld.at<double>(2),          // -Z
-                -ptWorld.at<double>(1)            // Y
-            );
+            Eigen::Vector3d ptWorld = prevKf->sophPose * ptCam;
+
 
             std::shared_ptr<MapPoint> newMapPoint = std::make_shared<MapPoint>(
-                position
+                ptWorld
             );
-
-            LOG("New MapPoint created"); 
 
             prevKf->vecMapPoints[match.queryIdx] = newMapPoint;
             currKf->vecMapPoints[match.trainIdx] = newMapPoint;
@@ -62,31 +54,50 @@ void Map::CreateMapPoints(std::vector<cv::DMatch> matches) {
             newMapPoint->AddObservation(currKf, match.trainIdx);
 
         } else {
-            LOG("New MapPoint created");
-            
             currKf->vecMapPoints[match.trainIdx] = prevKf->vecMapPoints[match.queryIdx];
             prevKf->vecMapPoints[match.queryIdx]->AddObservation(currKf, match.trainIdx);
         }
-        
     }
+
+
+    // this->CullKeyframes();  
+    this->UpdateMap();
 }
+
 
 std::shared_ptr<KeyFrame> Map::GetLastKeyFrame(){
     return this->kfLast;
 }
 
-std::vector<cv::Point3d> Map::GetKeyFrames() const{
-    std::vector<cv::Point3d> keyframes;
+std::vector<std::shared_ptr<KeyFrame>> Map::GetNKeyFrames(int win) const{
+    if (this->vecKeyFrames.size() >= win) {
+        return std::vector<std::shared_ptr<KeyFrame>>(this->vecKeyFrames.end() - win, this->vecKeyFrames.end());
+    }
+    
+    return this->vecKeyFrames;
+}
+
+std::vector<Eigen::Vector3d> Map::GetKeyFramesPositions() const{
+    std::vector<Eigen::Vector3d> keyframes;
 
     for (auto &&kf : this->vecKeyFrames) {
-        keyframes.push_back({kf->matPose.at<double>(0, 3), -kf->matPose.at<double>(2, 3), -kf->matPose.at<double>(1, 3)});
+        Eigen::Vector3d t = kf->sophPose.translation();
+
+        keyframes.emplace_back(t.x(), -t.z(), -t.y());
     }
     
     return keyframes;
 }
 
-std::vector<cv::Point3d> Map::GetMapPoints() const{
-    return this->vecMapPoints;
+std::vector<Eigen::Vector3d> Map::GetMapPointsPositions() const{
+    std::vector<Eigen::Vector3d> mapPoints;
+
+    for (auto &&mp : this->vecMapPoints) {
+        Eigen::Vector3d pt(mp.x(), -mp.z(), -mp.y());
+        
+        mapPoints.emplace_back(pt);
+    }
+    return mapPoints;
 }
 
 bool Map::IsTrackingEmpty(){
@@ -100,51 +111,50 @@ void Map::CullKeyframes() {
     keep[0] = true;  
     keep.back() = true;  
 
-    for (size_t i = 1; i < this->vecKeyFrames.size()-1; i++) {
-        cv::Mat tPrev = this->vecKeyFrames[i-1]->matPose.inv() * this->vecKeyFrames[i]->matPose;
-        cv::Mat tNext = this->vecKeyFrames[i]->matPose.inv() * this->vecKeyFrames[i+1]->matPose;
+    for (size_t i = 1; i < this->vecKeyFrames.size() - 1; ++i) {
+        auto& prevPose = this->vecKeyFrames[i - 1]->sophPose;
+        auto& currPose = this->vecKeyFrames[i]->sophPose;
+        auto& nextPose = this->vecKeyFrames[i + 1]->sophPose;
 
-        double trPrev = cv::norm(tPrev(cv::Rect(3, 0, 1, 3)));
-        double trNext = cv::norm(tNext(cv::Rect(3, 0, 1, 3)));
-        
-        cv::Mat rvecPrev, rvecNext;
-        cv::Rodrigues(tPrev(cv::Rect(0, 0, 3, 3)), rvecPrev);
-        cv::Rodrigues(tNext(cv::Rect(0, 0, 3, 3)), rvecNext);
-        
-        double rotPrev = cv::norm(rvecPrev);
-        double rotNext = cv::norm(rvecNext);
+        Sophus::SE3d tPrev = prevPose.inverse() * currPose;
+        Sophus::SE3d tNext = currPose.inverse() * nextPose;
 
-        const double trTresh = 1.5;  
-        const double rotThresh = 0.1; 
-        keep[i] = (trPrev > trTresh || 
-                       trNext > trTresh ||
-                       rotPrev > rotThresh || 
-                       rotNext > rotThresh);
+        double trPrev = tPrev.translation().norm();
+        double trNext = tNext.translation().norm();
+
+        double rotPrev = tPrev.so3().log().norm();
+        double rotNext = tNext.so3().log().norm();
+
+        const double trThresh = 1.5;
+        const double rotThresh = 0.1;
+
+        keep[i] = (trPrev > trThresh || trNext > trThresh ||
+                   rotPrev > rotThresh || rotNext > rotThresh);
     }
 
     size_t keptCount = std::count(keep.begin(), keep.end(), true);
     if (keptCount < 5) {
-        for (size_t i = this->vecKeyFrames.size()-2; 
-             i > 0 && keptCount < 5; 
-             i--) {
+        for (size_t i = this->vecKeyFrames.size() - 2;
+             i > 0 && keptCount < 5;
+             --i) {
             if (!keep[i]) {
                 keep[i] = true;
-                keptCount++;
+                ++keptCount;
             }
         }
     }
 
     std::vector<std::shared_ptr<KeyFrame>> new_keyframes;
-    for (size_t i = 0; i < this->vecKeyFrames.size(); i++) {
+    for (size_t i = 0; i < this->vecKeyFrames.size(); ++i) {
         if (keep[i]) {
             new_keyframes.push_back(this->vecKeyFrames[i]);
         } else {
             std::shared_ptr<KeyFrame> kf = this->vecKeyFrames[i];
-            for (auto& mp: kf->vecMapPoints){
+            for (auto& mp : kf->vecMapPoints) {
                 if (mp) {
                     mp->RemoveObservation(kf);
 
-                    if(mp->IsBad()){
+                    if (mp->IsBad()) {
                         auto observations = mp->GetObservations();
                         for (auto& obs : observations) {
                             if (auto kfPtr = obs.first.lock()) {
@@ -152,6 +162,7 @@ void Map::CullKeyframes() {
                             }
                         }
                     }
+
                     mp.reset();
                 }
             }
@@ -159,6 +170,7 @@ void Map::CullKeyframes() {
     }
 
     this->vecKeyFrames = new_keyframes;
+
     if (!this->vecKeyFrames.empty()) {
         kfLast = this->vecKeyFrames.back();
     }
@@ -172,7 +184,6 @@ void Map::UpdateMap() {
         
         for (const auto& mp : kf->vecMapPoints) {
             if (mp) {
-                LOG("MapPoint Position: " << mp->GetPosition());
                 this->vecMapPoints.push_back(mp->GetPosition());
             }
         }

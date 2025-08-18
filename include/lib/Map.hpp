@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Eigen/Core>
+
 #include "KeyFrame.hpp"
 #include "MapPoint.hpp"
 
@@ -11,16 +13,18 @@ public:
     void CreateMapPoints(std::vector<cv::DMatch>);
     
     std::shared_ptr<KeyFrame> GetLastKeyFrame();
-    std::vector<cv::Point3d> GetKeyFrames() const;
-    std::vector<cv::Point3d> GetMapPoints() const;
+    std::vector<std::shared_ptr<KeyFrame>> GetNKeyFrames(int) const;
+    std::vector<Eigen::Vector3d> GetKeyFramesPositions() const;
+    std::vector<Eigen::Vector3d> GetMapPointsPositions() const;
     bool IsTrackingEmpty();
+
 private:
     std::vector<std::shared_ptr<KeyFrame>> vecKeyFrames;
     std::shared_ptr<KeyFrame> kfLast;
-
+    
     cv::Mat K;
-    std::vector<cv::Point3d> vecMapPoints;
-
+    std::vector<Eigen::Vector3d> vecMapPoints;
     void CullKeyframes();
     void UpdateMap();
+
 };
