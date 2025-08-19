@@ -11,3 +11,5 @@
     #define INFO(n)
     #define ERROR(n)
 #endif
+
+extern std::mutex gMapMutex;

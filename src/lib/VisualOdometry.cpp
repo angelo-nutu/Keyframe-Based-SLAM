@@ -24,7 +24,10 @@ std::pair<std::vector<cv::KeyPoint>, cv::Mat> VisualOdometry::ExtractFeatures(cv
     cv::Mat                   dpCurrImg;
     cv::cvtColor(rgb, rgb, cv::COLOR_RGB2BGR);
     
-    this->ptrExtractor->detectAndCompute(rgb, mask, kpCurrImg, dpCurrImg);
+    cv::Mat gray; 
+    if (rgb.channels() == 3) cv::cvtColor(rgb, gray, cv::COLOR_BGR2GRAY);
+    else gray = rgb;
+    this->ptrExtractor->detectAndCompute(gray, mask, kpCurrImg, dpCurrImg);
 
     return {kpCurrImg, dpCurrImg};
 }
@@ -135,30 +138,33 @@ bool VisualOdometry::Track(cv::Mat rgbFrame, cv::Mat depthFrame, cv::Mat maskFra
     auto [kpCurrImg, dpCurrImg] = this->ExtractFeatures(rgbFrame, maskFrame);
 
     std::vector<cv::DMatch> matches;
-    if(!this->map->IsTrackingEmpty()){
-        auto [points3D, points2D] = this->MatchFeatures(dpCurrImg, kpCurrImg, matches);
-        
-        if(points3D.size() >= 4) {
-            auto [estimated, T, inliers] = this->EstimatePose(points3D, points2D);
-            success = estimated;
+    {
+        std::lock_guard<std::mutex> lock(gMapMutex);
+        if(!this->map->IsTrackingEmpty()){
+            auto [points3D, points2D] = this->MatchFeatures(dpCurrImg, kpCurrImg, matches);
             
-            addKeyframe = this->ShouldAddKeyFrame(inliers);
+            if(points3D.size() >= 4) {
+                auto [estimated, T, inliers] = this->EstimatePose(points3D, points2D);
+                success = estimated;
+                
+                addKeyframe = this->ShouldAddKeyFrame(inliers);
+                
+            }
+        }
+        
+        if (this->map->IsTrackingEmpty() || addKeyframe) {
+            KeyFrame keyFrame(
+                rgbFrame,
+                depthFrame,
+                kpCurrImg,
+                dpCurrImg,
+                this->poses.back()
+            );
+    
+            this->map->AddKeyframe(keyFrame);
+            this->map->CreateMapPoints(matches);
             
         }
-    }
-    
-    if (this->map->IsTrackingEmpty() || addKeyframe) {
-        KeyFrame keyFrame(
-            rgbFrame,
-            depthFrame,
-            kpCurrImg,
-            dpCurrImg,
-            this->poses.back()
-        );
-
-        this->map->AddKeyframe(keyFrame);
-        this->map->CreateMapPoints(matches);
-        
     }
     
 

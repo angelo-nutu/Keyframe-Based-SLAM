@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Eigen/Core>
+#include <unordered_set>
+#include <algorithm>
 
 #include "KeyFrame.hpp"
 #include "MapPoint.hpp"
@@ -17,6 +19,7 @@ public:
     std::vector<Eigen::Vector3d> GetKeyFramesPositions() const;
     std::vector<Eigen::Vector3d> GetMapPointsPositions() const;
     bool IsTrackingEmpty();
+    void UpdateMap();
 
 private:
     std::vector<std::shared_ptr<KeyFrame>> vecKeyFrames;
@@ -25,6 +28,5 @@ private:
     cv::Mat K;
     std::vector<Eigen::Vector3d> vecMapPoints;
     void CullKeyframes();
-    void UpdateMap();
 
 };

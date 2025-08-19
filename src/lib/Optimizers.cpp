@@ -7,7 +7,7 @@
 #include <memory>
 #include <cmath>
 #include <iostream>
-#include <bits/std_thread.h>
+#include <thread>
 
 using BA = Optimizers::BundleAdjustment;
 
@@ -47,23 +47,31 @@ void BA::Optimize() {
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    std::vector<std::shared_ptr<KeyFrame>> keyframes = this->map->GetNKeyFrames(this->numKeyFrames);
-    if (keyframes.empty()) {
-        LOG("No keyframes available, skipping optimization.");
-        return;
+    ceres::Problem problem;
+    std::unordered_map<std::shared_ptr<KeyFrame>, double*> kfPoses;        
+    std::unordered_map<std::shared_ptr<MapPoint>, double*> mpPoints;
+    std::vector<std::shared_ptr<KeyFrame>> keyframes;
+    std::unordered_map<std::shared_ptr<MapPoint>, std::pair<int,int>> mpCounts;
+
+    {
+        std::lock_guard<std::mutex> lock(gMapMutex);
+
+        keyframes = this->map->GetNKeyFrames(this->numKeyFrames);
+        if (keyframes.empty()) {
+            LOG("No keyframes available, skipping optimization.");
+            return;
+        }
+
     }
 
-    std::unordered_map<std::shared_ptr<KeyFrame>, double*> kfPoses;        
-    std::unordered_map<std::shared_ptr<MapPoint>, double*> mpPoints;        
     std::vector<std::array<double, 6>> pose_params; pose_params.reserve(keyframes.size());
     std::vector<std::array<double, 3>> point_params; point_params.reserve(1024);
 
-    ceres::Problem problem;
 
     std::shared_ptr<MapPoint> anchor_mp = nullptr;
     double anchor_z0 = 0.0;
 
-    size_t k = 0;
+    // size_t k = 0;
     for (auto& kf : keyframes) {
         if (!kf) continue;
 
@@ -76,15 +84,16 @@ void BA::Optimize() {
         double* cam = storage.data();
         problem.AddParameterBlock(cam, 6);
 
-        if (k == 0) {
-            problem.SetParameterBlockConstant(cam);
-        } else {
-            problem.SetManifold(cam, new ceres::EuclideanManifold<6>());
-        }
+        // if (k == 0) {
+        //     problem.SetParameterBlockConstant(cam);
+        // } else {
+            // }
+        problem.SetManifold(cam, new ceres::EuclideanManifold<6>());
 
         kfPoses[kf] = cam;
-        ++k;
+        // ++k;
     }
+    problem.SetParameterBlockConstant(kfPoses[keyframes.back()]);
 
     const double chi2_2d_95 = 5.991;
     const double pixel_sigma = 1.0; 
@@ -118,6 +127,9 @@ void BA::Optimize() {
             for (int t = 0; t < 6; ++t) twc_vec[t] = cam[t];
             Sophus::SE3d Twc = Sophus::SE3d::exp(twc_vec);
 
+            auto &cnt = mpCounts[mp];
+            cnt.first++;
+
             const Eigen::Vector3d Pw = mp->GetPosition();
             const Eigen::Vector3d Pcam = Twc.inverse() * Pw;
             if (Pcam.z() <= 0.0) {
@@ -140,16 +152,23 @@ void BA::Optimize() {
                 continue;
             }
 
+            cnt.second++;
+
             ceres::CostFunction* cost =
                 new ceres::AutoDiffCostFunction<
                     ReprojectionErrorCostFunction, 2, 6, 3>(
                         new ReprojectionErrorCostFunction(u_obs, v_obs));
 
-            
+            const double alpha = 1.0;
+            const double beta  = 0.25;
+            const double z     = Pcam.z();
+            double w = 1.0 / (alpha + beta * z * z); 
 
-            ceres::LossFunction* loss = new ceres::HuberLoss(huber_delta);
+            ceres::LossFunction* huber_loss  = new ceres::HuberLoss(huber_delta);
+            ceres::LossFunction* scaled_loss  =
+                new ceres::ScaledLoss(huber_loss, w, ceres::TAKE_OWNERSHIP);
 
-            problem.AddResidualBlock(cost, loss, cam, pt);
+            problem.AddResidualBlock(cost, scaled_loss, cam, pt);
 
             if (kf_idx == 0 && !anchor_mp) {
                 anchor_mp = mp;
@@ -185,7 +204,7 @@ void BA::Optimize() {
     options.linear_solver_type = ceres::SPARSE_SCHUR;
     options.preconditioner_type = ceres::SCHUR_JACOBI;
     options.use_inner_iterations = true;
-    options.max_num_iterations = 30;
+    options.max_num_iterations = 20;
     options.minimizer_progress_to_stdout = false;
 
     options.num_threads = std::max(1u, std::thread::hardware_concurrency() / 2);
@@ -200,15 +219,46 @@ void BA::Optimize() {
               << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
               << " ms\n";
 
-    for (auto& [kf, param] : kfPoses) {
-        Eigen::Matrix<double,6,1> tangent;
-        for (int i = 0; i < 6; ++i) tangent[i] = param[i];
-        Sophus::SE3d Twc = Sophus::SE3d::exp(tangent);
-        kf->sophPose = Twc;
+    {
+        std::lock_guard<std::mutex> lock(gMapMutex);
+
+        const int    min_inlier_kfs   = 2;
+        const double min_inlier_ratio = 0.4;
+
+        for (auto& [mp, counts] : mpCounts) {
+            if (!mp) continue;
+            const int total   = counts.first;
+            const int inliers = counts.second;
+
+            bool drop = (total < 2) ||
+                        (inliers < min_inlier_kfs) ||
+                        (total > 0 && (double)inliers / (double)total < min_inlier_ratio);
+
+            if (!drop) continue;
+
+            for (auto& kf : keyframes) {
+                if (!kf) continue;
+                for (size_t j = 0; j < kf->vecMapPoints.size(); ++j) {
+                    if (kf->vecMapPoints[j] == mp) {
+                        kf->vecMapPoints[j].reset();
+                    }
+                }
+            }
+        }
+
+        for (auto& [kf, param] : kfPoses) {
+            Eigen::Matrix<double,6,1> tangent;
+            for (int i = 0; i < 6; ++i) tangent[i] = param[i];
+            Sophus::SE3d Twc = Sophus::SE3d::exp(tangent);
+            kf->sophPose = Twc;
+        }
+    
+        for (auto& [mp, pt] : mpPoints) {
+            Eigen::Vector3d pos(pt[0], pt[1], pt[2]);
+            mp->SetPosition(pos);
+        }
+
+
     }
 
-    for (auto& [mp, pt] : mpPoints) {
-        Eigen::Vector3d pos(pt[0], pt[1], pt[2]);
-        mp->SetPosition(pos);
-    }
 }

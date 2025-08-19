@@ -8,6 +8,8 @@
 #include "Utils.hpp"
 #include "Map.hpp"
 
+std::mutex gMapMutex;
+
 int main(int argc, char* argv[]) {
     
     if(argc > 1){
@@ -25,6 +27,8 @@ int main(int argc, char* argv[]) {
     Optimizers::BundleAdjustment localBA(camera.getIntrinsics().first, map);
     INFO("Initialized Pipeline");
 
+    std::atomic<bool> baRunning = false;
+    std::thread       localBAThread;
     while (true){
         auto frames = camera.GrabFrames();
         if (!frames) {
@@ -41,13 +45,28 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        // auto start = std::chrono::high_resolution_clock::now();
-        if(addedKeyFrame)
-            localBA.Optimize();
-        // auto end = std::chrono::high_resolution_clock::now();
-        // std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms\n";
+        if(addedKeyFrame && !baRunning.load()) {
+            baRunning.store(true);
+            localBAThread = std::thread([&](){
+                localBA.Optimize();
+                baRunning.store(false);
+            });
+            localBAThread.detach();
+        }
+        // if(addedKeyFrame){
+        //     localBA.Optimize();
+        // }
+        
 
-        viewer.Update(map->GetKeyFramesPositions(), map->GetKeyFramesPositions(), map->GetMapPointsPositions(), rgb.clone(), depth.clone(), mask.clone());
+        std::vector<Eigen::Vector3d> KfsPos;
+        std::vector<Eigen::Vector3d> MpsPos;
+
+        {   
+            std::lock_guard<std::mutex> lock(gMapMutex);
+            KfsPos = map->GetKeyFramesPositions(); 
+            MpsPos = map->GetMapPointsPositions();
+        }
+        viewer.Update(KfsPos, KfsPos, MpsPos, rgb.clone(), depth.clone(), mask.clone());
 
     }
     
