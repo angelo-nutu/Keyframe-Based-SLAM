@@ -14,11 +14,11 @@ Since visual odometry (VO) systems inherently suffer from error accumulation and
 This project relies on the following external libraries and tools:
 
 - **[Sophus](https://github.com/strasdat/Sophus)** – used for SE(3) abstractions, instead of relying on `cv::Mat`, to make geometric operations more expressive and efficient
-- **[Ceres Solver](https://github.com/ceres-solver/ceres-solver.git)** – used for the non-linear optimization tasks that appear in the backend of the VO pipeline
+- **[Ceres Solver](https://github.com/ceres-solver/ceres-solver.git)** – used for the non-linear optimization tasks that appear in the backend of the SLAM
 - **[OpenCV](https://opencv.org/)** – used to implement the basic visual odometry pipeline (image processing, feature extraction, and tracking)
 - **[ZeroMQ (ZMQ)](https://zeromq.org/)** – used to receive data from a dedicated camera-manager wrapper at each iteration of the main loop
 - **as-serializers** – dedicated E-Agle github repo to generate protobuf definitions for the structured data received via ZMQ
-- **[Rerun](https://rerun.io/)** – used for visualization of the VO process and results
+- **[Rerun](https://rerun.io/)** – used for visualization of the SLAM process and results
 
 
 ## Useful Links
