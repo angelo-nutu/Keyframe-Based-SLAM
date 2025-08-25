@@ -11,14 +11,6 @@
 std::mutex gMapMutex;
 
 int main(int argc, char* argv[]) {
-    
-    if(argc > 1){
-        std::string path = argv[1];
-    } else {
-        ERROR("No configuration path provided!");
-        FIX("Use ./executable path/to/yaml");
-        // exit(EXIT_FAILURE); ao lo reimplemento 
-    }
 
     Camera camera;
     std::shared_ptr<Map> map = std::make_shared<Map>(camera.getIntrinsics().first);

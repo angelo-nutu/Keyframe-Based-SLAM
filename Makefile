@@ -6,7 +6,7 @@ dir:
 	@mkdir -p build 2>/dev/null
 
 debug: dir
-	@cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j$$(nproc)
+	@cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && make
 
 release: dir
 	@cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j$$(nproc)

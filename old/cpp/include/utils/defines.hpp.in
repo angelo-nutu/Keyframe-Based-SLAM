@@ -1,7 +1,0 @@
-#ifndef __DEFINES_HPP__
-#define __DEFINES_HPP__
-
-#define LOG_BASE_PATH "@USER_HOME@/logs-camera-logger/"
-#define HOME_PATH "@USER_HOME@/"
-
-#endif
